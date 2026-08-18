@@ -1,0 +1,75 @@
+[package]
+name        = "skein"
+version     = "0.1.0"
+edition     = "2021"
+description = "Context-aware visual state daemon — reactive color extraction over IPC"
+license     = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "skeind"
+path = "src/main.rs"
+
+# ---------------------------------------------------------------------------
+# Runtime dependencies
+# ---------------------------------------------------------------------------
+[dependencies]
+
+# ── Async runtime ────────────────────────────────────────────────────────────
+tokio        = { version = "1",   features = ["full"] }
+tokio-util   = { version = "0.7", features = ["codec"] }
+bytes        = "1"
+
+# ── D-Bus (MPRIS listener) ──────────────────────────────────────────────────
+# zbus 5.x — the `tokio` feature selects the Tokio async backend.
+zbus         = { version = "5", features = ["tokio"] }
+
+# ── Color science ────────────────────────────────────────────────────────────
+# palette 0.7: Oklab, Oklch, Srgb, IntoColor, Wcag21RelativeLuminance.
+palette      = { version = "0.7", features = ["std"] }
+# kmeans_colors 0.7: `palette_color` enables Calculate for palette::Lab<D65>.
+# NOTE: Oklab is NOT directly supported — we cluster in Lab, then convert back.
+kmeans_colors = { version = "0.7", features = ["palette_color"] }
+
+# ── Image loading & downsampling ─────────────────────────────────────────────
+# Broad format support for album art (jpeg, png, webp, gif cover art, etc.)
+image        = { version = "0.25", default-features = true }
+
+# ── HTTP client (fetch remote album art) ─────────────────────────────────────
+reqwest      = { version = "0.12", features = ["rustls-tls", "stream"], default-features = false }
+
+# ── Serialization ────────────────────────────────────────────────────────────
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+
+# ── Templating (legacy file-write fallback) ──────────────────────────────────
+# `json` feature allows using serde_json values directly in template context.
+minijinja    = { version = "2", features = ["loader", "json"] }
+
+# ── Observability ────────────────────────────────────────────────────────────
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# ── Error handling ───────────────────────────────────────────────────────────
+anyhow       = "1"
+thiserror    = "1"
+
+# ── Misc utilities ───────────────────────────────────────────────────────────
+futures-util = "0.3"
+# XDG directory resolution.
+dirs-next    = "2"
+
+# ---------------------------------------------------------------------------
+# Dev-only dependencies
+# ---------------------------------------------------------------------------
+[dev-dependencies]
+# For integration tests that need a temporary directory.
+tempfile     = "3"
+
+# ---------------------------------------------------------------------------
+# Release profile: maximum performance, minimal binary size
+# ---------------------------------------------------------------------------
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"

@@ -1,0 +1,24 @@
+{# skein — colors.css.jinja
+   Hot-reloadable CSS custom properties.
+   Works with Waybar, AGS, Quickshell, or any CSS file watcher.
+   Rendered to: ~/.cache/skein/colors.css
+#}
+:root {
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --skein-background:      {{ theme.background }};
+  --skein-surface:         {{ theme.surface }};
+  --skein-surface-variant: {{ theme.surface_variant }};
+
+  /* ── Accents ─────────────────────────────────────────────── */
+  --skein-primary:         {{ theme.primary }};
+  --skein-accent:          {{ theme.accent }};
+
+  /* ── Text (WCAG AA guaranteed) ───────────────────────────── */
+  --skein-text:            {{ theme.text }};
+  --skein-subtext:         {{ theme.subtext }};
+
+  /* ── Raw Oklch seed (for downstream manipulation) ────────── */
+  --skein-seed-l:          {{ theme.seed_oklch.lightness }};
+  --skein-seed-c:          {{ theme.seed_oklch.chroma }};
+  --skein-seed-h:          {{ theme.seed_oklch.hue }};
+}
