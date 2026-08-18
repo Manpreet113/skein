@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [[bin]]
 name = "skeinc"
-path = "src/bin/skeinc.rs"
+path = "src/bin/skeinc/main.rs"
 
 # ---------------------------------------------------------------------------
 # Runtime dependencies
@@ -24,18 +24,16 @@ tokio-util   = { version = "0.7", features = ["codec"] }
 bytes        = "1"
 
 # ── D-Bus (MPRIS listener) ──────────────────────────────────────────────────
-# zbus 5.x — the `tokio` feature selects the Tokio async backend.
 zbus         = { version = "5", features = ["tokio"] }
 
+# ── Filesystem watcher (wallpaper monitoring) ────────────────────────────────
+notify       = "6"
+
 # ── Color science ────────────────────────────────────────────────────────────
-# palette 0.7: Oklab, Oklch, Srgb, IntoColor, Wcag21RelativeLuminance.
 palette      = { version = "0.7", features = ["std"] }
-# kmeans_colors 0.7: `palette_color` enables Calculate for palette::Lab<D65>.
-# NOTE: Oklab is NOT directly supported — we cluster in Lab, then convert back.
 kmeans_colors = { version = "0.7", features = ["palette_color"] }
 
 # ── Image loading & downsampling ─────────────────────────────────────────────
-# Broad format support for album art (jpeg, png, webp, gif cover art, etc.)
 image        = { version = "0.25", default-features = true }
 
 # ── HTTP client (fetch remote album art) ─────────────────────────────────────
@@ -46,7 +44,6 @@ serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
 
 # ── Templating (legacy file-write fallback) ──────────────────────────────────
-# `json` feature allows using serde_json values directly in template context.
 minijinja    = { version = "2", features = ["loader", "json"] }
 
 # ── Observability ────────────────────────────────────────────────────────────
@@ -59,12 +56,9 @@ thiserror    = "1"
 
 # ── Misc utilities ───────────────────────────────────────────────────────────
 futures-util = "0.3"
-# XDG directory resolution.
 dirs-next    = "2"
 
 # ── TUI (skeinc) ─────────────────────────────────────────────────────────────
-# ratatui 0.30 ships with a built-in crossterm backend; pull crossterm
-# separately for EventStream (async key events).
 ratatui    = { version = "0.30", features = ["crossterm"] }
 crossterm  = { version = "0.29", features = ["event-stream"] }
 
@@ -72,12 +66,8 @@ crossterm  = { version = "0.29", features = ["event-stream"] }
 # Dev-only dependencies
 # ---------------------------------------------------------------------------
 [dev-dependencies]
-# For integration tests that need a temporary directory.
 tempfile     = "3"
 
-# ---------------------------------------------------------------------------
-# Release profile: maximum performance, minimal binary size
-# ---------------------------------------------------------------------------
 [profile.release]
 opt-level     = 3
 lto           = "thin"
