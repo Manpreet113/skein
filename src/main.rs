@@ -92,6 +92,20 @@ struct FileConfig {
     contrast: Option<f32>,
 }
 
+/// Expand a leading `~` or `~/` to the user's home directory.
+fn expand_tilde(p: PathBuf) -> PathBuf {
+    match p.to_str() {
+        Some(s) if s == "~" => dirs_next::home_dir().unwrap_or(p),
+        Some(s) if s.starts_with("~/") => {
+            match dirs_next::home_dir() {
+                Some(home) => home.join(&s[2..]),
+                None => p,
+            }
+        }
+        _ => p,
+    }
+}
+
 struct Config {
     socket_path: PathBuf,
     template_dir: PathBuf,
@@ -153,21 +167,25 @@ impl Config {
                 .socket
                 .clone()
                 .or(file.socket)
+                .map(expand_tilde)
                 .unwrap_or_else(|| runtime_dir.join("skeind.sock")),
             template_dir: args
                 .template_dir
                 .clone()
                 .or(file.template_dir)
+                .map(expand_tilde)
                 .unwrap_or_else(|| config_dir.join("skein/templates")),
             wallpaper_dir: args
                 .wallpaper_dir
                 .clone()
                 .or(file.wallpaper_dir)
+                .map(expand_tilde)
                 .unwrap_or_else(|| config_dir.join("skein/wallpaper")),
             output_dir: args
                 .output_dir
                 .clone()
                 .or(file.output_dir)
+                .map(expand_tilde)
                 .unwrap_or_else(|| cache_dir.join("skein")),
             prefer_dark,
             scheme,
@@ -355,5 +373,24 @@ fn fallback_theme() -> Theme {
             hue: 297.0,
         },
         dark_mode: true,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expands_tilde() {
+        let home = dirs_next::home_dir().unwrap();
+        assert_eq!(expand_tilde(PathBuf::from("~")), home);
+        assert_eq!(
+            expand_tilde(PathBuf::from("~/foo/bar")),
+            home.join("foo/bar")
+        );
+        assert_eq!(
+            expand_tilde(PathBuf::from("/abs/path")),
+            PathBuf::from("/abs/path")
+        );
     }
 }

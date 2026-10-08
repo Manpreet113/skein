@@ -74,6 +74,7 @@ theme.seed_oklch.{lightness,chroma,hue}  theme.dark_mode
 
 Built-in targets: `colors.css` (Waybar/AGS/CSS), `colors.json`, `alacritty.toml`,
 `kitty.conf`, `hyprland.conf`, `rofi.rasi`, `mako`, `gtk.css`, `cava.conf`,
+`dunstrc`, `foot.ini`, `swaylock.conf`,
 `fish-theme.fish`.
 
 ## Home manager

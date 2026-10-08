@@ -1,0 +1,11 @@
+{# swaylock — import from swaylock config:  include ~/.cache/skein/swaylock.conf
+   Colors are hex RRGGBB / RRGGBBAA without the leading '#'.
+#}
+color={{ theme.background | replace("#", "") }}FE
+ring-color={{ theme.primary | replace("#", "") }}FF
+inner-color={{ theme.surface | replace("#", "") }}CC
+line-uses-ring
+key-hl-color={{ theme.accent | replace("#", "") }}FF
+text-color={{ theme.text | replace("#", "") }}FF
+separator-color=00000000
+incorrect-text-color={{ theme.accent | replace("#", "") }}FF

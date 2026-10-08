@@ -1,0 +1,23 @@
+{# dunst 1.13+ — import from dunstrc:  include = ~/.cache/skein/dunstrc
+#}
+[global]
+background = "{{ theme.background }}"
+foreground = "{{ theme.text }}"
+frame_color = "{{ theme.primary }}"
+highlight = "{{ theme.accent }}"
+corner_radius = 8
+
+[urgency_low]
+background = "{{ theme.surface }}"
+foreground = "{{ theme.subtext }}"
+frame_color = "{{ theme.surface_variant }}"
+
+[urgency_normal]
+background = "{{ theme.background }}"
+foreground = "{{ theme.text }}"
+frame_color = "{{ theme.primary }}"
+
+[urgency_critical]
+background = "{{ theme.background }}"
+foreground = "{{ theme.accent }}"
+frame_color = "{{ theme.accent }}"
