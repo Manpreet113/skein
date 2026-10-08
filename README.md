@@ -72,6 +72,9 @@ theme.background / surface / surface_variant / primary / accent / text / subtext
 theme.seed_oklch.{lightness,chroma,hue}  theme.dark_mode
 ```
 
+The daemon also writes a `theme.json` snapshot of the current theme to
+`~/.cache/skein/theme.json` on every change, for tools that prefer a file over the socket.
+
 Built-in targets: `colors.css` (Waybar/AGS/CSS), `colors.json`, `alacritty.toml`,
 `kitty.conf`, `hyprland.conf`, `rofi.rasi`, `mako`, `gtk.css`, `cava.conf`,
 `dunstrc`, `foot.ini`, `swaylock.conf`,
