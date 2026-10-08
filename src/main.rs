@@ -1,18 +1,69 @@
-mod color;
-mod dbus;
-mod ipc;
-mod template;
-mod wallpaper;
-
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use tokio::{signal, sync::watch};
 use tracing::{info, warn};
 
-use color::Theme;
-use template::TemplateRenderer;
+use skein::color::{self, Scheme, Theme};
+use skein::template::{self, TemplateRenderer};
+use skein::{ipc, wallpaper};
 
+#[derive(Parser, Debug)]
+#[command(name = "skeind", version, about = "Wallpaper-driven color theme daemon")]
+struct Args {
+    /// Run once against a single image, render templates, and exit.
+    #[arg(long, value_name = "PATH")]
+    image: Option<PathBuf>,
+
+    /// Print the extracted theme as JSON (with --image) and exit.
+    #[arg(long)]
+    json: bool,
+
+    /// Color mode.
+    #[arg(long, value_enum)]
+    mode: Option<Mode>,
+
+    /// Palette scheme.
+    #[arg(long, value_enum)]
+    scheme: Option<Scheme>,
+
+    /// Directory of wallpaper images to watch.
+    #[arg(long)]
+    wallpaper_dir: Option<PathBuf>,
+
+    /// Directory containing *.jinja templates.
+    #[arg(long)]
+    template_dir: Option<PathBuf>,
+
+    /// Directory where rendered templates are written.
+    #[arg(long)]
+    output_dir: Option<PathBuf>,
+
+    /// Unix socket path for IPC.
+    #[arg(long)]
+    socket: Option<PathBuf>,
+
+    /// Path to config file (default: ~/.config/skein/config.toml).
+    #[arg(long)]
+    config: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Mode {
+    Dark,
+    Light,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct FileConfig {
+    wallpaper_dir: Option<PathBuf>,
+    template_dir: Option<PathBuf>,
+    output_dir: Option<PathBuf>,
+    socket: Option<PathBuf>,
+    mode: Option<String>,
+    scheme: Option<String>,
+}
 
 struct Config {
     socket_path: PathBuf,
@@ -20,10 +71,11 @@ struct Config {
     wallpaper_dir: PathBuf,
     output_dir: PathBuf,
     prefer_dark: bool,
+    scheme: Scheme,
 }
 
 impl Config {
-    fn resolve() -> Self {
+    fn resolve(args: &Args) -> Result<Self> {
         let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("/tmp"));
@@ -40,13 +92,58 @@ impl Config {
                 dirs_next::cache_dir().unwrap_or_else(|| PathBuf::from("~/.cache"))
             });
 
-        Self {
-            socket_path: runtime_dir.join("skeind.sock"),
-            template_dir: config_dir.join("skein/templates"),
-            wallpaper_dir: config_dir.join("skein/wallpaper"),
-            output_dir: cache_dir.join("skein"),
-            prefer_dark: true,
-        }
+        let config_path = args
+            .config
+            .clone()
+            .unwrap_or_else(|| config_dir.join("skein/config.toml"));
+
+        let file = match std::fs::read_to_string(&config_path) {
+            Ok(raw) => toml::from_str::<FileConfig>(&raw)
+                .with_context(|| format!("Failed to parse {}", config_path.display()))?,
+            Err(_) => FileConfig::default(),
+        };
+
+        let prefer_dark = match args.mode.or_else(|| {
+            file.mode.as_deref().and_then(|m| match m {
+                "light" => Some(Mode::Light),
+                "dark" => Some(Mode::Dark),
+                _ => None,
+            })
+        }) {
+            Some(Mode::Light) => false,
+            Some(Mode::Dark) | None => true,
+        };
+
+        let scheme = match (args.scheme, file.scheme.as_deref()) {
+            (Some(s), _) => s,
+            (None, Some(s)) => s.parse()?,
+            (None, None) => Scheme::Tonal,
+        };
+
+        Ok(Self {
+            socket_path: args
+                .socket
+                .clone()
+                .or(file.socket)
+                .unwrap_or_else(|| runtime_dir.join("skeind.sock")),
+            template_dir: args
+                .template_dir
+                .clone()
+                .or(file.template_dir)
+                .unwrap_or_else(|| config_dir.join("skein/templates")),
+            wallpaper_dir: args
+                .wallpaper_dir
+                .clone()
+                .or(file.wallpaper_dir)
+                .unwrap_or_else(|| config_dir.join("skein/wallpaper")),
+            output_dir: args
+                .output_dir
+                .clone()
+                .or(file.output_dir)
+                .unwrap_or_else(|| cache_dir.join("skein")),
+            prefer_dark,
+            scheme,
+        })
     }
 }
 
@@ -61,18 +158,41 @@ async fn main() -> Result<()> {
         .compact()
         .init();
 
+    let args = Args::parse();
+    let config = Config::resolve(&args)?;
+
+    // One-shot mode: extract theme from a single image and exit.
+    if let Some(image_path) = &args.image {
+        let bytes = tokio::fs::read(image_path)
+            .await
+            .with_context(|| format!("Failed to read {}", image_path.display()))?;
+
+        let prefer_dark = config.prefer_dark;
+        let scheme = config.scheme;
+        let theme = tokio::task::spawn_blocking(move || {
+            color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
+        })
+        .await??;
+
+        if args.json {
+            println!("{}", serde_json::to_string_pretty(&theme)?);
+        } else {
+            template::seed_builtin_templates(&config.template_dir).await?;
+            let renderer =
+                TemplateRenderer::load(&config.template_dir, &config.output_dir).await?;
+            renderer.render_all(&theme).await?;
+            println!("Rendered templates to {}", config.output_dir.display());
+            println!("{}", serde_json::to_string_pretty(&theme)?);
+        }
+        return Ok(());
+    }
+
     info!("skeind starting");
-
-    let config = Config::resolve();
-
-    let dbus_conn = zbus::Connection::session()
-        .await
-        .context("Failed to connect to D-Bus session bus")?;
-
-    info!("Connected to D-Bus session bus");
 
     let initial_theme = Arc::new(fallback_theme());
     let (theme_tx, theme_rx) = watch::channel(Arc::clone(&initial_theme));
+
+    template::seed_builtin_templates(&config.template_dir).await?;
 
     let renderer = TemplateRenderer::load(&config.template_dir, &config.output_dir)
         .await
@@ -87,27 +207,14 @@ async fn main() -> Result<()> {
     .await
     .context("Failed to start IPC server")?;
 
-    let mut art_rx = dbus::spawn_mpris_monitor(&dbus_conn)
-        .await
-        .context("Failed to start MPRIS monitor")?;
-
     let mut wallpaper_rx = wallpaper::spawn_wallpaper_monitor(&config.wallpaper_dir)
         .await
         .context("Failed to start wallpaper monitor")?;
-
-    let http = reqwest::Client::builder()
-        .user_agent("skeind/0.1")
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .context("Failed to build HTTP client")?;
 
     info!("All subsystems started — waiting for events");
 
     let shutdown = signal::ctrl_c();
     tokio::pin!(shutdown);
-
-    let mut baseline_theme: Option<Arc<Theme>> = None;
-    let mut mpris_active = false;
 
     loop {
         tokio::select! {
@@ -119,58 +226,31 @@ async fn main() -> Result<()> {
             }
 
             maybe_wall = wallpaper_rx.recv() => {
-                if let Some(event) = maybe_wall {
-                    info!(path = %event.path.display(), "Wallpaper event triggered");
-                    if let Ok(bytes) = tokio::fs::read(&event.path).await {
-                        let prefer_dark = config.prefer_dark;
-                        let theme_res = tokio::task::spawn_blocking(move || {
-                            color::extract_theme_from_bytes(&bytes, prefer_dark)
-                        })
-                        .await;
-
-                        if let Ok(Ok(theme)) = theme_res {
-                            let arc_theme = Arc::new(theme);
-                            baseline_theme = Some(Arc::clone(&arc_theme));
-
-                            if !mpris_active {
-                                info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper baseline theme");
-                                broadcast_and_render(&arc_theme, &theme_tx, &renderer);
-                            } else {
-                                info!("Wallpaper baseline updated in background (MPRIS active)");
-                            }
-                        }
-                    }
-                }
-            }
-
-            maybe_event = art_rx.recv() => {
-                match maybe_event {
+                match maybe_wall {
                     Some(event) => {
-                        if let Some(url) = &event.art_url {
-                            info!(player = %event.player, url = %url, "Fetching album art");
-                            if let Ok(bytes) = fetch_art_bytes(&http, url).await {
-                                let prefer_dark = config.prefer_dark;
-                                let theme_res = tokio::task::spawn_blocking(move || {
-                                    color::extract_theme_from_bytes(&bytes, prefer_dark)
-                                })
-                                .await;
+                        info!(path = %event.path.display(), "Wallpaper event triggered");
+                        if let Ok(bytes) = tokio::fs::read(&event.path).await {
+                            let prefer_dark = config.prefer_dark;
+                            let scheme = config.scheme;
+                            let theme_res = tokio::task::spawn_blocking(move || {
+                                color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
+                            })
+                            .await;
 
-                                if let Ok(Ok(theme)) = theme_res {
+                            match theme_res {
+                                Ok(Ok(theme)) => {
                                     let arc_theme = Arc::new(theme);
-                                    mpris_active = true;
-                                    info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying transient MPRIS album art theme");
+                                    info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
                                     broadcast_and_render(&arc_theme, &theme_tx, &renderer);
                                 }
+                                Ok(Err(e)) => warn!(error = %e, "Theme extraction failed"),
+                                Err(e) => warn!(error = %e, "Theme extraction task panicked"),
                             }
-                        } else {
-                            mpris_active = false;
-                            let revert_theme = baseline_theme.clone().unwrap_or_else(|| Arc::new(fallback_theme()));
-                            info!(bg = %revert_theme.background, "MPRIS playback stopped/no art — reverting to baseline theme");
-                            broadcast_and_render(&revert_theme, &theme_tx, &renderer);
                         }
                     }
                     None => {
-                        warn!("MPRIS art channel closed");
+                        warn!("Wallpaper channel closed");
+                        break;
                     }
                 }
             }
@@ -198,37 +278,6 @@ fn broadcast_and_render(
             warn!(error = %e, "Template render pass failed");
         }
     });
-}
-
-async fn fetch_art_bytes(http: &reqwest::Client, url: &str) -> Result<Vec<u8>> {
-    if let Some(path_str) = url.strip_prefix("file://") {
-        let decoded = percent_decode(path_str);
-        tokio::fs::read(&decoded)
-            .await
-            .with_context(|| format!("Failed to read local art file: {decoded}"))
-    } else {
-        let response = http
-            .get(url)
-            .send()
-            .await
-            .with_context(|| format!("HTTP GET failed for {url}"))?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("HTTP {} fetching art from {}", response.status(), url);
-        }
-
-        response
-            .bytes()
-            .await
-            .map(|b| b.to_vec())
-            .with_context(|| format!("Failed to read HTTP response body from {url}"))
-    }
-}
-
-fn percent_decode(s: &str) -> String {
-    s.replace("%20", " ")
-        .replace("%3A", ":")
-        .replace("%3a", ":")
 }
 
 fn fallback_theme() -> Theme {

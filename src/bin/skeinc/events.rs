@@ -59,11 +59,10 @@ pub async fn handle_key(key: KeyEvent, app: Arc<Mutex<App>>) -> Option<Theme> {
             state.reset_to_daemon();
         }
 
-        KeyCode::Enter | KeyCode::Char(' ') => {
-            if state.dirty {
+        KeyCode::Enter | KeyCode::Char(' ')
+            if state.dirty => {
                 return Some(state.local_theme.clone());
             }
-        }
 
         _ => {}
     }

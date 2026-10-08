@@ -74,6 +74,52 @@ const KMEANS_CONVERGENCE: f32 = 1e-4; // tight convergence in Oklab space
 const KMEANS_SEED: u64 = 0xDEAD_BEEF_CAFE_1337;
 const MAX_DIM: u32 = 128;
 
+/// How strongly the seed hue is expressed in the palette.
+/// Plays the role of matugen's/pywal's scheme selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum Scheme {
+    /// Bold, saturated accents.
+    Vibrant,
+    /// Balanced tonal palette (default).
+    #[default]
+    Tonal,
+    /// Desaturated, soft, paper-like.
+    Muted,
+}
+
+impl Scheme {
+    /// Inclusive chroma clamp range for the primary accent.
+    fn primary_chroma_range(self) -> (f32, f32) {
+        match self {
+            Self::Vibrant => (0.08, 0.22),
+            Self::Tonal => (0.04, 0.16),
+            Self::Muted => (0.015, 0.07),
+        }
+    }
+
+    /// Accent chroma multiplier relative to primary.
+    fn accent_chroma_mul(self) -> f32 {
+        match self {
+            Self::Vibrant => 1.2,
+            Self::Tonal => 1.05,
+            Self::Muted => 0.9,
+        }
+    }
+}
+
+impl std::str::FromStr for Scheme {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "vibrant" => Ok(Self::Vibrant),
+            "tonal" => Ok(Self::Tonal),
+            "muted" => Ok(Self::Muted),
+            other => anyhow::bail!("unknown scheme '{other}' (expected vibrant|tonal|muted)"),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // WCAG constants
 // ---------------------------------------------------------------------------
@@ -93,7 +139,7 @@ const WCAG_AA_LARGE: f32 = 3.0;
 ///
 /// # Errors
 /// Returns an error if the bytes cannot be decoded as a supported image format.
-pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool) -> Result<Theme> {
+pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool, scheme: Scheme) -> Result<Theme> {
     // 1. Decode the image.
     let img = image::load_from_memory(bytes).context("Failed to decode image bytes")?;
 
@@ -134,7 +180,7 @@ pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool) -> Result<Theme
     let seed_oklch = lab_to_oklch(seed_lab);
 
     // 6. Generate the full tonal palette.
-    let theme = build_palette(seed_oklch, prefer_dark);
+    let theme = build_palette(seed_oklch, prefer_dark, scheme);
 
     Ok(theme)
 }
@@ -244,7 +290,7 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 /// Hue is **always preserved** from the seed. Only L and C are manipulated.
 ///
 /// Dark-mode tonal targets (Oklch L values):
-/// ```
+/// ```text
 ///   background:     0.12
 ///   surface:        0.17
 ///   surface_variant:0.22
@@ -253,10 +299,11 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 ///   text:           nudged until WCAG AA ≥ 4.5 on background
 ///   subtext:        nudged until WCAG ≥ 3.0 on background
 /// ```
-fn build_palette(seed: Oklch<f32>, dark: bool) -> Theme {
+fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme) -> Theme {
     let h = seed.hue;
     // Clamp seed chroma to a tasteful range; very high chroma looks garish.
-    let c_primary = seed.chroma.clamp(0.04, 0.18);
+    let (cmin, cmax) = scheme.primary_chroma_range();
+    let c_primary = seed.chroma.clamp(cmin, cmax);
     let c_surface = c_primary * 0.3; // surfaces are subtly tinted
 
     let (bg_l, sf_l, sfv_l, primary_l_range, text_l_start, text_l_step) = if dark {
@@ -286,7 +333,7 @@ fn build_palette(seed: Oklch<f32>, dark: bool) -> Theme {
     let surface = oklch_to_hex(Oklch::new(sf_l, c_surface * 0.6, h));
     let surface_variant = oklch_to_hex(Oklch::new(sfv_l, c_surface * 0.7, h));
     let primary = oklch_to_hex(Oklch::new(primary_l, c_primary, h));
-    let accent = oklch_to_hex(Oklch::new(accent_l, c_primary * 1.1, h));
+    let accent = oklch_to_hex(Oklch::new(accent_l, c_primary * scheme.accent_chroma_mul(), h));
 
     // Contrast-guarantee pass: nudge text lightness until WCAG AA ≥ 4.5.
     let text = enforce_contrast(
@@ -427,7 +474,7 @@ mod tests {
     fn palette_text_meets_wcag_aa() {
         // Synthesise a vivid blue seed.
         let seed = Oklch::new(0.55_f32, 0.18, palette::OklabHue::new(250.0));
-        let theme = build_palette(seed, true);
+        let theme = build_palette(seed, true, Scheme::Tonal);
 
         // Parse the hex colors back and check contrast.
         let bg = hex_to_srgb(&theme.background).unwrap();

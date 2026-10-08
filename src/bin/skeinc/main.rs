@@ -5,6 +5,7 @@ mod ui;
 
 use std::{
     io::{self, stdout},
+    path::PathBuf,
     sync::Arc,
     time::Duration,
 };
@@ -27,8 +28,48 @@ use events::handle_key;
 use net::{connect_and_pump, resolve_socket_path};
 use ui::render;
 
+#[derive(clap::Parser)]
+#[command(name = "skeinc", version, about = "skein TUI client / theme tool")]
+struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Extract a theme from an image and print JSON (no daemon needed).
+    Generate {
+        image: PathBuf,
+        #[arg(long, value_enum, default_value_t = Mode::Dark)]
+        mode: Mode,
+        #[arg(long, value_enum, default_value_t = skein::color::Scheme::Tonal)]
+        scheme: skein::color::Scheme,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Mode {
+    Dark,
+    Light,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = <Args as clap::Parser>::parse();
+
+    if let Some(Command::Generate { image, mode, scheme }) = args.command {
+        let bytes = tokio::fs::read(&image)
+            .await
+            .with_context(|| format!("Failed to read {}", image.display()))?;
+        let prefer_dark = matches!(mode, Mode::Dark);
+        let theme = tokio::task::spawn_blocking(move || {
+            skein::color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
+        })
+        .await??;
+        println!("{}", serde_json::to_string_pretty(&theme)?);
+        return Ok(());
+    }
+
     let (theme_tx, mut theme_rx) = mpsc::channel::<Theme>(8);
     let (socket_tx, socket_rx) = mpsc::channel::<Theme>(8);
 

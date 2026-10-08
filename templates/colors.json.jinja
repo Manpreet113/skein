@@ -1,0 +1,15 @@
+{
+  "background": "{{ theme.background }}",
+  "surface": "{{ theme.surface }}",
+  "surface_variant": "{{ theme.surface_variant }}",
+  "primary": "{{ theme.primary }}",
+  "accent": "{{ theme.accent }}",
+  "text": "{{ theme.text }}",
+  "subtext": "{{ theme.subtext }}",
+  "seed_oklch": {
+    "lightness": {{ theme.seed_oklch.lightness }},
+    "chroma": {{ theme.seed_oklch.chroma }},
+    "hue": {{ theme.seed_oklch.hue }}
+  },
+  "dark_mode": {{ "true" if theme.dark_mode else "false" }}
+}

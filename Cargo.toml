@@ -2,8 +2,12 @@
 name        = "skein"
 version     = "0.1.0"
 edition     = "2021"
-description = "Context-aware visual state daemon — reactive color extraction over IPC"
+description = "Wallpaper-driven color scheme generator and theme daemon (matugen/pywal-style)"
 license     = "MIT OR Apache-2.0"
+
+[lib]
+name = "skein"
+path = "src/lib.rs"
 
 [[bin]]
 name = "skeind"
@@ -23,9 +27,6 @@ tokio        = { version = "1",   features = ["full"] }
 tokio-util   = { version = "0.7", features = ["codec"] }
 bytes        = "1"
 
-# ── D-Bus (MPRIS listener) ──────────────────────────────────────────────────
-zbus         = { version = "5", features = ["tokio"] }
-
 # ── Filesystem watcher (wallpaper monitoring) ────────────────────────────────
 notify       = "6"
 
@@ -36,12 +37,13 @@ kmeans_colors = { version = "0.7", features = ["palette_color"] }
 # ── Image loading & downsampling ─────────────────────────────────────────────
 image        = { version = "0.25", default-features = true }
 
-# ── HTTP client (fetch remote album art) ─────────────────────────────────────
-reqwest      = { version = "0.12", features = ["rustls-tls", "stream"], default-features = false }
-
 # ── Serialization ────────────────────────────────────────────────────────────
 serde        = { version = "1", features = ["derive"] }
 serde_json   = "1"
+toml         = "0.8"
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+clap = { version = "4", features = ["derive"] }
 
 # ── Templating (legacy file-write fallback) ──────────────────────────────────
 minijinja    = { version = "2", features = ["loader", "json"] }

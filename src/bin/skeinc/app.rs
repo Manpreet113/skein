@@ -55,7 +55,7 @@ impl ColorRole {
         }
     }
 
-    pub fn hex<'a>(self, t: &'a Theme) -> &'a str {
+    pub fn hex(self, t: &Theme) -> &str {
         match self {
             Self::Background => &t.background,
             Self::Surface => &t.surface,
@@ -67,7 +67,7 @@ impl ColorRole {
         }
     }
 
-    pub fn hex_mut<'a>(self, t: &'a mut Theme) -> &'a mut String {
+    pub fn hex_mut(self, t: &mut Theme) -> &mut String {
         match self {
             Self::Background => &mut t.background,
             Self::Surface => &mut t.surface,
@@ -222,17 +222,17 @@ pub fn oklch_to_hex(l: f32, c: f32, h_deg: f32) -> String {
     let a = c * h.cos();
     let b = c * h.sin();
 
-    let l_ = l + 0.3963377774 * a + 0.2158037573 * b;
-    let m_ = l - 0.1055613458 * a - 0.0638541728 * b;
-    let s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+    let l_ = l + 0.396_337_78 * a + 0.215_803_76 * b;
+    let m_ = l - 0.105_561_346 * a - 0.063_854_17 * b;
+    let s_ = l - 0.089_484_18 * a - 1.291_485_5 * b;
 
     let l3 = l_ * l_ * l_;
     let m3 = m_ * m_ * m_;
     let s3 = s_ * s_ * s_;
 
-    let r_lin = 4.0767416621 * l3 - 3.3077115913 * m3 + 0.2309699292 * s3;
-    let g_lin = -1.2684380046 * l3 + 2.6097574011 * m3 - 0.3413193965 * s3;
-    let b_lin = -0.0041960863 * l3 - 0.7034186147 * m3 + 1.7076147010 * s3;
+    let r_lin = 4.076_741_7 * l3 - 3.307_711_6 * m3 + 0.230_969_94 * s3;
+    let g_lin = -1.268_438 * l3 + 2.609_757_4 * m3 - 0.341_319_38 * s3;
+    let b_lin = -0.0041960863 * l3 - 0.703_418_6 * m3 + 1.707_614_7 * s3;
 
     let gamma = |x: f32| -> f32 {
         let x = x.clamp(0.0, 1.0);
@@ -275,13 +275,13 @@ pub fn hex_to_oklch(hex: &str) -> (f32, f32, f32) {
     let g_lin = ungamma(g_srgb);
     let b_lin = ungamma(b_srgb);
 
-    let l_ = (0.4122214708 * r_lin + 0.5363325363 * g_lin + 0.0514459929 * b_lin).cbrt();
-    let m_ = (0.2119034982 * r_lin + 0.6806995451 * g_lin + 0.1073969566 * b_lin).cbrt();
-    let s_ = (0.0883024619 * r_lin + 0.2817188376 * g_lin + 0.6299787005 * b_lin).cbrt();
+    let l_ = (0.412_221_46 * r_lin + 0.536_332_55 * g_lin + 0.051_445_995 * b_lin).cbrt();
+    let m_ = (0.211_903_5 * r_lin + 0.680_699_5 * g_lin + 0.107_396_96 * b_lin).cbrt();
+    let s_ = (0.088_302_46 * r_lin + 0.281_718_85 * g_lin + 0.629_978_7 * b_lin).cbrt();
 
-    let l = 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720403 * s_;
-    let a = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
-    let b = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757993 * s_;
+    let l = 0.210_454_26 * l_ + 0.793_617_8 * m_ - 0.0040720403 * s_;
+    let a = 1.977_998_5 * l_ - 2.428_592_2 * m_ + 0.450_593_7 * s_;
+    let b = 0.025_904_037 * l_ + 0.782_771_77 * m_ - 0.808_675_8 * s_;
 
     let c = (a * a + b * b).sqrt();
     let mut h = b.atan2(a).to_degrees();

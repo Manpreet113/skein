@@ -41,6 +41,36 @@ use tracing::{debug, info, warn};
 
 use crate::color::Theme;
 
+/// Templates embedded into the binary and seeded into the user's template
+/// directory on first run. Existing user files are never overwritten.
+const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
+    ("colors.css.jinja", include_str!("../templates/colors.css.jinja")),
+    ("colors.json.jinja", include_str!("../templates/colors.json.jinja")),
+    ("alacritty.toml.jinja", include_str!("../templates/alacritty.toml.jinja")),
+    ("kitty.conf.jinja", include_str!("../templates/kitty.conf.jinja")),
+    ("hyprland.conf.jinja", include_str!("../templates/hyprland.conf.jinja")),
+];
+
+/// Copy any missing builtin templates into `template_dir`.
+pub async fn seed_builtin_templates(template_dir: &Path) -> Result<()> {
+    fs::create_dir_all(template_dir)
+        .await
+        .with_context(|| format!("Failed to create template dir {}", template_dir.display()))?;
+
+    for (name, source) in BUILTIN_TEMPLATES {
+        let path = template_dir.join(name);
+        if path.exists() {
+            continue;
+        }
+        fs::write(&path, *source)
+            .await
+            .with_context(|| format!("Failed to write builtin template {}", path.display()))?;
+        info!(template = %path.display(), "Seeded builtin template");
+    }
+
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
@@ -73,6 +103,10 @@ impl TemplateRenderer {
             .with_context(|| format!("Failed to create output dir {}", output_dir.display()))?;
 
         let mut env = Environment::new();
+        // skein templates emit code/markup, never HTML — disable autoescape.
+        // (minijinja infers a JSON autoescape for template names like
+        // `colors.json.jinja`, which would quote every interpolated value.)
+        env.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
         let mut outputs: Vec<(String, PathBuf)> = Vec::new();
 
         // Walk template_dir, load each .jinja file.
