@@ -17,7 +17,7 @@ Components:
 ```sh
 nix build
 nix run .#            # skeind
-pipx install .       # (or cargo install --path .)
+cargo install --path .         # or via nix profile install
 cargo build --release
 ```
 
