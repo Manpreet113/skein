@@ -44,6 +44,12 @@ enum Command {
         mode: Mode,
         #[arg(long, value_enum, default_value_t = skein::color::Scheme::Tonal)]
         scheme: skein::color::Scheme,
+        /// Explicit seed color ("#RRGGBB") instead of extracting from the image.
+        #[arg(long)]
+        seed: Option<String>,
+        /// Minimum text contrast ratio against the background.
+        #[arg(long, default_value_t = skein::color::WCAG_AA_NORMAL)]
+        contrast: f32,
     },
 }
 
@@ -51,21 +57,40 @@ enum Command {
 enum Mode {
     Dark,
     Light,
+    Auto,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = <Args as clap::Parser>::parse();
 
-    if let Some(Command::Generate { image, mode, scheme }) = args.command {
-        let bytes = tokio::fs::read(&image)
-            .await
-            .with_context(|| format!("Failed to read {}", image.display()))?;
-        let prefer_dark = matches!(mode, Mode::Dark);
-        let theme = tokio::task::spawn_blocking(move || {
-            skein::color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
-        })
-        .await??;
+    if let Some(Command::Generate {
+        image,
+        mode,
+        scheme,
+        seed,
+        contrast,
+    }) = args.command
+    {
+        let prefer_dark = match mode {
+            Mode::Dark => true,
+            Mode::Light => false,
+            Mode::Auto => skein::color::system_prefers_dark(),
+        };
+        let theme = if let Some(seed_hex) = seed {
+            tokio::task::spawn_blocking(move || {
+                skein::color::theme_from_seed_hex(&seed_hex, prefer_dark, scheme, contrast)
+            })
+            .await??
+        } else {
+            let bytes = tokio::fs::read(&image)
+                .await
+                .with_context(|| format!("Failed to read {}", image.display()))?;
+            tokio::task::spawn_blocking(move || {
+                skein::color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
+            })
+            .await??
+        };
         println!("{}", serde_json::to_string_pretty(&theme)?);
         return Ok(());
     }

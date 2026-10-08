@@ -124,7 +124,7 @@ impl std::str::FromStr for Scheme {
 // WCAG constants
 // ---------------------------------------------------------------------------
 
-const WCAG_AA_NORMAL: f32 = 4.5;
+pub const WCAG_AA_NORMAL: f32 = 4.5;
 const WCAG_AA_LARGE: f32 = 3.0;
 
 // ---------------------------------------------------------------------------
@@ -139,7 +139,7 @@ const WCAG_AA_LARGE: f32 = 3.0;
 ///
 /// # Errors
 /// Returns an error if the bytes cannot be decoded as a supported image format.
-pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool, scheme: Scheme) -> Result<Theme> {
+pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool, scheme: Scheme, contrast: f32) -> Result<Theme> {
     // 1. Decode the image.
     let img = image::load_from_memory(bytes).context("Failed to decode image bytes")?;
 
@@ -180,9 +180,49 @@ pub fn extract_theme_from_bytes(bytes: &[u8], prefer_dark: bool, scheme: Scheme)
     let seed_oklch = lab_to_oklch(seed_lab);
 
     // 6. Generate the full tonal palette.
-    let theme = build_palette(seed_oklch, prefer_dark, scheme);
+    let theme = build_palette(seed_oklch, prefer_dark, scheme, contrast);
 
     Ok(theme)
+}
+
+/// Build a theme directly from an explicit seed color ("#RRGGBB"),
+/// skipping image K-Means extraction entirely.
+pub fn theme_from_seed_hex(hex: &str, prefer_dark: bool, scheme: Scheme, contrast: f32) -> Result<Theme> {
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        anyhow::bail!("seed must be a #RRGGBB hex color, got '{hex}'");
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).context("bad red channel")? as f32 / 255.0;
+    let g = u8::from_str_radix(&hex[2..4], 16).context("bad green channel")? as f32 / 255.0;
+    let b = u8::from_str_radix(&hex[4..6], 16).context("bad blue channel")? as f32 / 255.0;
+    let srgb = Srgb::new(r, g, b);
+    let oklab: Oklab<f32> = srgb.into_color();
+    let seed_oklch: Oklch<f32> = oklab.into_color();
+    Ok(build_palette(seed_oklch, prefer_dark, scheme, contrast))
+}
+
+/// Best-effort system dark/light detection.
+/// Order: $SKEIN_MODE → GNOME gsettings → $GTK_THEME → default dark.
+pub fn system_prefers_dark() -> bool {
+    if let Ok(v) = std::env::var("SKEIN_MODE") {
+        return !v.eq_ignore_ascii_case("light");
+    }
+
+    if let Ok(output) = std::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", "color-scheme"])
+        .output()
+    {
+        let s = String::from_utf8_lossy(&output.stdout);
+        if s.contains("prefer-light") {
+            return false;
+        }
+    }
+
+    if let Ok(theme) = std::env::var("GTK_THEME") {
+        return !theme.to_ascii_lowercase().contains("light");
+    }
+
+    true
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +339,7 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 ///   text:           nudged until WCAG AA ≥ 4.5 on background
 ///   subtext:        nudged until WCAG ≥ 3.0 on background
 /// ```
-fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme) -> Theme {
+fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) -> Theme {
     let h = seed.hue;
     // Clamp seed chroma to a tasteful range; very high chroma looks garish.
     let (cmin, cmax) = scheme.primary_chroma_range();
@@ -342,7 +382,7 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme) -> Theme {
         h,
         text_l_start,
         text_l_step,
-        WCAG_AA_NORMAL,
+        contrast,
     );
     let subtext = enforce_contrast(
         bg_l,
@@ -474,7 +514,7 @@ mod tests {
     fn palette_text_meets_wcag_aa() {
         // Synthesise a vivid blue seed.
         let seed = Oklch::new(0.55_f32, 0.18, palette::OklabHue::new(250.0));
-        let theme = build_palette(seed, true, Scheme::Tonal);
+        let theme = build_palette(seed, true, Scheme::Tonal, WCAG_AA_NORMAL);
 
         // Parse the hex colors back and check contrast.
         let bg = hex_to_srgb(&theme.background).unwrap();
@@ -484,6 +524,24 @@ mod tests {
             cr >= 4.5,
             "text contrast {cr:.2}:1 does not meet WCAG AA 4.5:1"
         );
+    }
+
+    #[test]
+    fn seed_hex_builds_valid_theme() {
+        let theme =
+            theme_from_seed_hex("#783CC8", true, Scheme::Tonal, WCAG_AA_NORMAL).unwrap();
+        assert!(theme.background.starts_with('#'));
+        assert!(theme.text.starts_with('#'));
+        assert!(theme.seed_oklch.hue > 280.0 && theme.seed_oklch.hue < 310.0);
+    }
+
+    #[test]
+    fn seed_contrast_target_is_honored() {
+        let theme = theme_from_seed_hex("#783CC8", true, Scheme::Tonal, 7.0).unwrap();
+        let bg = hex_to_srgb(&theme.background).unwrap();
+        let txt = hex_to_srgb(&theme.text).unwrap();
+        let cr = contrast_ratio(wcag_luminance(bg), wcag_luminance(txt));
+        assert!(cr >= 7.0, "text contrast {cr:.2}:1 below AAA 7:1");
     }
 
     fn hex_to_srgb(hex: &str) -> Option<Srgb<f32>> {

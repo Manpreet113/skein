@@ -24,6 +24,14 @@ struct Args {
     #[arg(long, value_enum)]
     mode: Option<Mode>,
 
+    /// Explicit seed color ("#RRGGBB") instead of extracting from the image.
+    #[arg(long)]
+    seed: Option<String>,
+
+    /// Minimum text contrast ratio against the background (e.g. 4.5 or 7.0).
+    #[arg(long)]
+    contrast: Option<f32>,
+
     /// Palette scheme.
     #[arg(long, value_enum)]
     scheme: Option<Scheme>,
@@ -53,6 +61,23 @@ struct Args {
 enum Mode {
     Dark,
     Light,
+    Auto,
+}
+
+/// Resolve the effective dark/light choice from CLI, config, or the system.
+fn resolve_prefer_dark(cli: Option<Mode>, file_mode: Option<&str>) -> bool {
+    let mode = cli.or_else(|| match file_mode {
+        Some("light") => Some(Mode::Light),
+        Some("dark") => Some(Mode::Dark),
+        Some("auto") => Some(Mode::Auto),
+        _ => None,
+    });
+
+    match mode {
+        Some(Mode::Light) => false,
+        Some(Mode::Dark) => true,
+        Some(Mode::Auto) | None => color::system_prefers_dark(),
+    }
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -63,6 +88,8 @@ struct FileConfig {
     socket: Option<PathBuf>,
     mode: Option<String>,
     scheme: Option<String>,
+    seed: Option<String>,
+    contrast: Option<f32>,
 }
 
 struct Config {
@@ -72,6 +99,8 @@ struct Config {
     output_dir: PathBuf,
     prefer_dark: bool,
     scheme: Scheme,
+    seed: Option<String>,
+    contrast: f32,
 }
 
 impl Config {
@@ -103,22 +132,21 @@ impl Config {
             Err(_) => FileConfig::default(),
         };
 
-        let prefer_dark = match args.mode.or_else(|| {
-            file.mode.as_deref().and_then(|m| match m {
-                "light" => Some(Mode::Light),
-                "dark" => Some(Mode::Dark),
-                _ => None,
-            })
-        }) {
-            Some(Mode::Light) => false,
-            Some(Mode::Dark) | None => true,
-        };
+        let prefer_dark = resolve_prefer_dark(args.mode, file.mode.as_deref());
 
         let scheme = match (args.scheme, file.scheme.as_deref()) {
             (Some(s), _) => s,
             (None, Some(s)) => s.parse()?,
             (None, None) => Scheme::Tonal,
         };
+
+        let seed = args.seed.clone().or(file.seed);
+
+        let contrast = args
+            .contrast
+            .or(file.contrast)
+            .unwrap_or(4.5_f32)
+            .clamp(1.0, 21.0);
 
         Ok(Self {
             socket_path: args
@@ -143,6 +171,8 @@ impl Config {
                 .unwrap_or_else(|| cache_dir.join("skein")),
             prefer_dark,
             scheme,
+            seed,
+            contrast,
         })
     }
 }
@@ -163,16 +193,23 @@ async fn main() -> Result<()> {
 
     // One-shot mode: extract theme from a single image and exit.
     if let Some(image_path) = &args.image {
-        let bytes = tokio::fs::read(image_path)
-            .await
-            .with_context(|| format!("Failed to read {}", image_path.display()))?;
-
         let prefer_dark = config.prefer_dark;
         let scheme = config.scheme;
-        let theme = tokio::task::spawn_blocking(move || {
-            color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
-        })
-        .await??;
+        let contrast = config.contrast;
+        let theme = if let Some(seed_hex) = config.seed.clone() {
+            tokio::task::spawn_blocking(move || {
+                color::theme_from_seed_hex(&seed_hex, prefer_dark, scheme, contrast)
+            })
+            .await??
+        } else {
+            let bytes = tokio::fs::read(image_path)
+                .await
+                .with_context(|| format!("Failed to read {}", image_path.display()))?;
+            tokio::task::spawn_blocking(move || {
+                color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
+            })
+            .await??
+        };
 
         if args.json {
             println!("{}", serde_json::to_string_pretty(&theme)?);
@@ -207,6 +244,26 @@ async fn main() -> Result<()> {
     .await
     .context("Failed to start IPC server")?;
 
+    // A pinned seed replaces the fallback and disables the wallpaper monitor.
+    if let Some(seed_hex) = &config.seed {
+        let theme = color::theme_from_seed_hex(
+            seed_hex,
+            config.prefer_dark,
+            config.scheme,
+            config.contrast,
+        )
+        .with_context(|| format!("Invalid --seed value: {seed_hex}"))?;
+        let arc = Arc::new(theme);
+        info!(bg = %arc.background, primary = %arc.primary, "Applying pinned seed theme");
+        broadcast_and_render(&arc, &theme_tx, &renderer);
+
+        info!("Daemon running with pinned seed theme — wallpaper monitor disabled");
+        let _ = signal::ctrl_c().await;
+        let _ = std::fs::remove_file(&config.socket_path);
+        info!("skeind stopped");
+        return Ok(());
+    }
+
     let mut wallpaper_rx = wallpaper::spawn_wallpaper_monitor(&config.wallpaper_dir)
         .await
         .context("Failed to start wallpaper monitor")?;
@@ -232,8 +289,9 @@ async fn main() -> Result<()> {
                         if let Ok(bytes) = tokio::fs::read(&event.path).await {
                             let prefer_dark = config.prefer_dark;
                             let scheme = config.scheme;
+                            let contrast = config.contrast;
                             let theme_res = tokio::task::spawn_blocking(move || {
-                                color::extract_theme_from_bytes(&bytes, prefer_dark, scheme)
+                                color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
                             })
                             .await;
 
