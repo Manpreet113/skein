@@ -22,6 +22,11 @@
         };
       });
 
+      homeModules.default = { config, lib, pkgs, ... }: {
+        imports = [ ./nix/home-manager.nix ];
+        config.services.skein.package = lib.mkDefault self.packages.${pkgs.system}.default;
+      };
+
       devShells = forAll (system: {
         default = nixpkgs.legacyPackages.${system}.mkShell {
           packages = with nixpkgs.legacyPackages.${system}; [
