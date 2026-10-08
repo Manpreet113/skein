@@ -1,0 +1,14 @@
+{# rofi 1.7+ theme variables snippet.  Import from a rasi theme with:
+   @import "~/.cache/skein/rofi.rasi"
+   Then reference @skein_bg, @skein_surface, @skein_primary, @skein_accent,
+   @skein_text, @skein_subtext.  Rendered to: ~/.cache/skein/rofi.rasi
+#}
+* {
+  skein_bg:      {{ theme.background }};
+  skein_surface: {{ theme.surface }};
+  skein_surface_variant: {{ theme.surface_variant }};
+  skein_primary: {{ theme.primary }};
+  skein_accent:  {{ theme.accent }};
+  skein_text:    {{ theme.text }};
+  skein_subtext: {{ theme.subtext }};
+}

@@ -49,6 +49,11 @@ const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
     ("alacritty.toml.jinja", include_str!("../templates/alacritty.toml.jinja")),
     ("kitty.conf.jinja", include_str!("../templates/kitty.conf.jinja")),
     ("hyprland.conf.jinja", include_str!("../templates/hyprland.conf.jinja")),
+    ("rofi.rasi.jinja", include_str!("../templates/rofi.rasi.jinja")),
+    ("mako.jinja", include_str!("../templates/mako.jinja")),
+    ("gtk.css.jinja", include_str!("../templates/gtk.css.jinja")),
+    ("cava.conf.jinja", include_str!("../templates/cava.conf.jinja")),
+    ("fish-theme.fish.jinja", include_str!("../templates/fish-theme.fish.jinja")),
 ];
 
 /// Copy any missing builtin templates into `template_dir`.

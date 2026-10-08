@@ -66,7 +66,7 @@ enum Mode {
 
 /// Resolve the effective dark/light choice from CLI, config, or the system.
 fn resolve_prefer_dark(cli: Option<Mode>, file_mode: Option<&str>) -> bool {
-    let mode = cli.or_else(|| match file_mode {
+    let mode = cli.or(match file_mode {
         Some("light") => Some(Mode::Light),
         Some("dark") => Some(Mode::Dark),
         Some("auto") => Some(Mode::Auto),
