@@ -33,6 +33,10 @@ use ui::render;
 struct Args {
     #[command(subcommand)]
     command: Option<Command>,
+
+    /// Unix socket path of the running daemon (default: $XDG_RUNTIME_DIR/skeind.sock).
+    #[arg(long)]
+    socket: Option<PathBuf>,
 }
 
 #[derive(clap::Subcommand)]
@@ -98,7 +102,7 @@ async fn main() -> Result<()> {
     let (theme_tx, mut theme_rx) = mpsc::channel::<Theme>(8);
     let (socket_tx, socket_rx) = mpsc::channel::<Theme>(8);
 
-    let socket_path = resolve_socket_path();
+    let socket_path = args.socket.clone().unwrap_or_else(resolve_socket_path);
     let initial = fallback_theme();
     let app = Arc::new(Mutex::new(App::new(initial)));
 
