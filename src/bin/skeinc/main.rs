@@ -41,6 +41,19 @@ struct Args {
 
 #[derive(clap::Subcommand)]
 enum Command {
+    /// Extract a theme from an image, render all templates to a preview dir,
+    /// and print the resulting theme (no daemon needed).
+    Preview {
+        image: PathBuf,
+        #[arg(long, value_enum, default_value_t = Mode::Dark)]
+        mode: Mode,
+        #[arg(long, value_enum, default_value_t = skein::color::Scheme::Tonal)]
+        scheme: skein::color::Scheme,
+        #[arg(long)]
+        seed: Option<String>,
+        #[arg(long, default_value_t = skein::color::WCAG_AA_NORMAL)]
+        contrast: f32,
+    },
     /// Extract a theme from an image and print JSON (no daemon needed).
     Generate {
         image: PathBuf,
@@ -67,6 +80,61 @@ enum Mode {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = <Args as clap::Parser>::parse();
+
+    if let Some(Command::Preview {
+        image,
+        mode,
+        scheme,
+        seed,
+        contrast,
+    }) = &args.command
+    {
+        let prefer_dark = match mode {
+            Mode::Dark => true,
+            Mode::Light => false,
+            Mode::Auto => skein::color::system_prefers_dark(),
+        };
+        let scheme = *scheme;
+        let contrast = *contrast;
+        let theme = if let Some(seed_hex) = seed {
+            let seed_hex = seed_hex.clone();
+            tokio::task::spawn_blocking(move || {
+                skein::color::theme_from_seed_hex(&seed_hex, prefer_dark, scheme, contrast)
+            })
+            .await??
+        } else {
+            let bytes = tokio::fs::read(&image)
+                .await
+                .with_context(|| format!("Failed to read {}", image.display()))?;
+            tokio::task::spawn_blocking(move || {
+                skein::color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
+            })
+            .await??
+        };
+
+        let cfg_dir = std::env::var("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                dirs_next::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"))
+            });
+        let template_dir = cfg_dir.join("skein/templates");
+        let preview_dir = std::env::var("XDG_CACHE_HOME")
+            .map(|d| PathBuf::from(d).join("skein/preview"))
+            .unwrap_or_else(|_| {
+                dirs_next::cache_dir()
+                    .unwrap_or_else(|| PathBuf::from("~/.cache"))
+                    .join("skein/preview")
+            });
+
+        skein::template::seed_builtin_templates(&template_dir).await?;
+        let renderer =
+            skein::template::TemplateRenderer::load(&template_dir, &preview_dir).await?;
+        renderer.render_all(&theme).await?;
+
+        println!("Preview rendered to {}", preview_dir.display());
+        println!("{}", serde_json::to_string_pretty(&theme)?);
+        return Ok(());
+    }
 
     if let Some(Command::Generate {
         image,

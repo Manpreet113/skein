@@ -273,7 +273,7 @@ async fn main() -> Result<()> {
         .with_context(|| format!("Invalid --seed value: {seed_hex}"))?;
         let arc = Arc::new(theme);
         info!(bg = %arc.background, primary = %arc.primary, "Applying pinned seed theme");
-        broadcast_and_render(&arc, &theme_tx, &renderer);
+        broadcast_and_render(&arc, &theme_tx, &renderer, &config.output_dir);
 
         info!("Daemon running with pinned seed theme — wallpaper monitor disabled");
         let _ = signal::ctrl_c().await;
@@ -317,7 +317,7 @@ async fn main() -> Result<()> {
                                 Ok(Ok(theme)) => {
                                     let arc_theme = Arc::new(theme);
                                     info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
-                                    broadcast_and_render(&arc_theme, &theme_tx, &renderer);
+                                    broadcast_and_render(&arc_theme, &theme_tx, &renderer, &config.output_dir);
                                 }
                                 Ok(Err(e)) => warn!(error = %e, "Theme extraction failed"),
                                 Err(e) => warn!(error = %e, "Theme extraction task panicked"),
@@ -345,13 +345,21 @@ fn broadcast_and_render(
     theme: &Arc<Theme>,
     theme_tx: &watch::Sender<Arc<Theme>>,
     renderer: &Arc<TemplateRenderer>,
+    output_dir: &std::path::Path,
 ) {
     let _ = theme_tx.send(Arc::clone(theme));
     let renderer = Arc::clone(renderer);
     let theme_for_tmpl = Arc::clone(theme);
+    let snapshot_path = output_dir.join("theme.json");
     tokio::spawn(async move {
         if let Err(e) = renderer.render_all(&theme_for_tmpl).await {
             warn!(error = %e, "Template render pass failed");
+        }
+        if let Ok(json) = serde_json::to_string_pretty(&*theme_for_tmpl) {
+            let tmp = snapshot_path.with_extension("skein.tmp");
+            if tokio::fs::write(&tmp, &json).await.is_ok() {
+                let _ = tokio::fs::rename(&tmp, &snapshot_path).await;
+            }
         }
     });
 }
