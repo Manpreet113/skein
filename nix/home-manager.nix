@@ -39,21 +39,21 @@ in {
     };
 
     wallpaperDir = mkOption {
-      type = types.nullOr types.path;
+      type = types.nullOr types.str;
       default = null;
-      description = "Directory of wallpapers to watch.";
+      description = "Directory of wallpapers to watch. A string so the daemon can expand ~ itself (a Nix path would be copied to the store).";
     };
 
     templateDir = mkOption {
-      type = types.nullOr types.path;
+      type = types.nullOr types.str;
       default = null;
-      description = "Directory of *.jinja templates.";
+      description = "Directory of *.jinja templates. String; ~ is expanded by the daemon.";
     };
 
     outputDir = mkOption {
-      type = types.nullOr types.path;
+      type = types.nullOr types.str;
       default = null;
-      description = "Directory rendered templates are written to.";
+      description = "Directory rendered templates are written to. String; ~ is expanded by the daemon.";
     };
   };
 
