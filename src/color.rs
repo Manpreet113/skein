@@ -60,10 +60,41 @@ pub struct Theme {
     pub green: String,
     /// Status yellow, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
     pub yellow: String,
+    /// Status orange, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
+    pub orange: String,
+    /// Status purple, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
+    pub purple: String,
+    /// 16-color terminal palette derived from the same hues (see [`AnsiPalette`]).
+    pub ansi: AnsiPalette,
     /// Raw Oklch seed for downstream manipulation (e.g. QML).
     pub seed_oklch: OklchSeed,
     /// Whether we're operating in dark or light mode.
     pub dark_mode: bool,
+}
+
+/// 16-color ANSI terminal palette. Normals reuse the enforced status roles
+/// (or equivalent walks) so they stay legible on `background`; brights are
+/// the same hues lifted for emphasis, held to ≥ 3.0:1. `black` is
+/// intentionally near-background (that is what terminal black means) and
+/// carries no contrast promise.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AnsiPalette {
+    pub black: String,
+    pub red: String,
+    pub green: String,
+    pub yellow: String,
+    pub blue: String,
+    pub magenta: String,
+    pub cyan: String,
+    pub white: String,
+    pub bright_black: String,
+    pub bright_red: String,
+    pub bright_green: String,
+    pub bright_yellow: String,
+    pub bright_blue: String,
+    pub bright_magenta: String,
+    pub bright_cyan: String,
+    pub bright_white: String,
 }
 
 /// The raw Oklch seed color, exposed so downstream clients can derive
@@ -73,6 +104,54 @@ pub struct OklchSeed {
     pub lightness: f32,
     pub chroma: f32,
     pub hue: f32,
+}
+
+impl Theme {
+    /// Shared Catppuccin-flavored placeholder used for daemon startup,
+    /// tests, and the TUI before the first real theme arrives.
+    pub fn test_fallback() -> Self {
+        let ansi = |hex: &str| hex.to_owned();
+        Self {
+            background: "#1e1e2e".into(),
+            surface: "#181825".into(),
+            surface_variant: "#313244".into(),
+            primary: "#cba6f7".into(),
+            accent: "#f38ba8".into(),
+            text: "#cdd6f4".into(),
+            subtext: "#a6adc8".into(),
+            dim: "#6c7086".into(),
+            border: "#45475a".into(),
+            red: "#f38ba8".into(),
+            green: "#a6e3a1".into(),
+            yellow: "#f9e2af".into(),
+            orange: "#fab387".into(),
+            purple: "#cba6f7".into(),
+            ansi: AnsiPalette {
+                black: ansi("#11111b"),
+                red: ansi("#f38ba8"),
+                green: ansi("#a6e3a1"),
+                yellow: ansi("#f9e2af"),
+                blue: ansi("#89b4fa"),
+                magenta: ansi("#cba6f7"),
+                cyan: ansi("#94e2d5"),
+                white: ansi("#cdd6f4"),
+                bright_black: ansi("#45475a"),
+                bright_red: ansi("#f38ba8"),
+                bright_green: ansi("#a6e3a1"),
+                bright_yellow: ansi("#f9e2af"),
+                bright_blue: ansi("#89b4fa"),
+                bright_magenta: ansi("#cba6f7"),
+                bright_cyan: ansi("#94e2d5"),
+                bright_white: ansi("#ffffff"),
+            },
+            seed_oklch: OklchSeed {
+                lightness: 0.72,
+                chroma: 0.14,
+                hue: 297.0,
+            },
+            dark_mode: true,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -359,7 +438,11 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 ///   text:           nudged until WCAG ≥ `contrast` on background
 ///   subtext:        nudged until WCAG ≥ 3.0 on background
 ///   dim:            nudged from near-background until WCAG ≥ 3.0
-///   red/green/yellow: fixed hues (30/150/105), nudged until WCAG ≥ 4.5
+///   red/green/yellow/orange/purple: fixed hues (30/150/105/60/310),
+///     nudged until WCAG ≥ 4.5
+///   ansi: status hues reused for red/green/yellow, fixed hues for
+///     blue (264)/magenta (328)/cyan (192), black near-background,
+///     white = text; brights lifted, held to ≥ 3.0
 /// ```
 fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) -> Theme {
     let h = seed.hue;
@@ -434,8 +517,9 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
     let border = oklch_to_hex(Oklch::new(border_l, c_surface * 0.7, h));
 
     // Status colors keep fixed semantic hues (red ~30°, green ~150°,
-    // yellow ~105° in Oklch) with the scheme's chroma, then get the same
-    // contrast-walk as text so they stay legible on `background`.
+    // yellow ~105°, orange ~60°, purple ~310° in Oklch) with the scheme's
+    // chroma, then get the same contrast-walk as text so they stay legible
+    // on `background`.
     // Walk direction always heads *away* from the background so the loop
     // converges even for mid-range starts.
     let (status_start, status_step) = if dark {
@@ -456,6 +540,52 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
     let red = status(30.0);
     let green = status(150.0);
     let yellow = status(105.0);
+    let orange = status(60.0);
+    let purple = status(310.0);
+    // Terminal blue/magenta/cyan need hues distinct from any seed: fixed
+    // cool hues with the same enforcement as the other status colors.
+    let blue = status(264.0);
+    let magenta = status(328.0);
+    let cyan = status(192.0);
+
+    // 16-color ANSI palette. Normals reuse the enforced roles above;
+    // black sits just off the background; white is the text role.
+    // Brights lift the same hues and hold ≥ 3.0 (emphasis, not body text).
+    let (bright_start, bright_step) = if dark {
+        (0.85_f32, 0.01_f32)
+    } else {
+        (0.25_f32, -0.01_f32)
+    };
+    let bright = |hue: palette::OklabHue<f32>, c: f32| {
+        enforce_contrast(bg_l, c, hue, bright_start, bright_step, WCAG_AA_LARGE)
+    };
+    let black = oklch_to_hex(Oklch::new(
+        if dark {
+            (bg_l + 0.08).clamp(0.0, 0.999)
+        } else {
+            (bg_l - 0.08).clamp(0.0, 0.999)
+        },
+        c_surface * 0.5,
+        h,
+    ));
+    let ansi = AnsiPalette {
+        black,
+        red: red.clone(),
+        green: green.clone(),
+        yellow: yellow.clone(),
+        blue: blue.clone(),
+        magenta: magenta.clone(),
+        cyan: cyan.clone(),
+        white: text.clone(),
+        bright_black: bright(h, c_surface * 0.5),
+        bright_red: bright(palette::OklabHue::new(30.0), c_primary),
+        bright_green: bright(palette::OklabHue::new(150.0), c_primary),
+        bright_yellow: bright(palette::OklabHue::new(105.0), c_primary),
+        bright_blue: bright(palette::OklabHue::new(264.0), c_primary),
+        bright_magenta: bright(palette::OklabHue::new(328.0), c_primary),
+        bright_cyan: bright(palette::OklabHue::new(192.0), c_primary),
+        bright_white: bright(h, c_surface * 0.15),
+    };
 
     Theme {
         background,
@@ -470,6 +600,9 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
         red,
         green,
         yellow,
+        orange,
+        purple,
+        ansi,
         seed_oklch: OklchSeed {
             lightness: seed.l,
             chroma: seed.chroma,

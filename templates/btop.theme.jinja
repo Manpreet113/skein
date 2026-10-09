@@ -1,0 +1,18 @@
+{# btop theme — select via an absolute `color_theme` path, e.g.:
+      color_theme = "/home/you/.cache/skein/btop.theme"
+    Takes effect on next btop launch.
+    Rendered to: ~/.cache/skein/btop.theme
+#}
+theme_bg="{{ theme.background }}"
+theme_fg="{{ theme.text }}"
+theme_title="{{ theme.primary }}"
+theme_hi_fg="{{ theme.accent }}"
+theme_selected_bg="{{ theme.surface_variant }}"
+theme_selected_fg="{{ theme.text }}"
+theme_inactive_fg="{{ theme.dim }}"
+theme_proc_misc="{{ theme.subtext }}"
+theme_cpu_box="{{ theme.green }}"
+theme_mem_box="{{ theme.yellow }}"
+theme_net_box="{{ theme.accent }}"
+theme_proc_box="{{ theme.subtext }}"
+theme_div_line="{{ theme.border }}"

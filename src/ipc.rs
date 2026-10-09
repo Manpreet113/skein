@@ -407,31 +407,11 @@ fn serialize_theme(theme: &Theme) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::color::OklchSeed;
     use std::time::Duration;
     use tokio::io::AsyncReadExt;
 
     fn dummy_theme() -> Theme {
-        Theme {
-            background: "#1a1a2e".into(),
-            surface: "#16213e".into(),
-            surface_variant: "#0f3460".into(),
-            primary: "#533483".into(),
-            accent: "#e94560".into(),
-            text: "#eaeaea".into(),
-            subtext: "#a8a8b3".into(),
-            dim: "#6c7086".into(),
-            border: "#45475a".into(),
-            red: "#f38ba8".into(),
-            green: "#a6e3a1".into(),
-            yellow: "#f9e2af".into(),
-            seed_oklch: OklchSeed {
-                lightness: 0.55,
-                chroma: 0.14,
-                hue: 290.0,
-            },
-            dark_mode: true,
-        }
+        Theme::test_fallback()
     }
 
     #[tokio::test]
@@ -486,7 +466,7 @@ mod tests {
         // Validate the JSON.
         let line = buf.split(|&b| b == b'\n').next().unwrap();
         let parsed: Theme = serde_json::from_slice(line).unwrap();
-        assert_eq!(parsed.background, "#1a1a2e");
+        assert_eq!(parsed.background, "#1e1e2e");
     }
 
     #[tokio::test]

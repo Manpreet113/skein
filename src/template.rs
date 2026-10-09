@@ -77,6 +77,10 @@ const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
     ("dunstrc.jinja", include_str!("../templates/dunstrc.jinja")),
     ("foot.ini.jinja", include_str!("../templates/foot.ini.jinja")),
     ("swaylock.conf.jinja", include_str!("../templates/swaylock.conf.jinja")),
+    ("ghostty.conf.jinja", include_str!("../templates/ghostty.conf.jinja")),
+    ("starship.toml.jinja", include_str!("../templates/starship.toml.jinja")),
+    ("btop.theme.jinja", include_str!("../templates/btop.theme.jinja")),
+    ("fzf.fish.jinja", include_str!("../templates/fzf.fish.jinja")),
 ];
 
 /// Copy any missing builtin templates into `template_dir`.
@@ -267,29 +271,9 @@ impl TemplateRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::color::OklchSeed;
 
     fn dummy_theme() -> Theme {
-        Theme {
-            background: "#1e1e2e".into(),
-            surface: "#181825".into(),
-            surface_variant: "#313244".into(),
-            primary: "#cba6f7".into(),
-            accent: "#f38ba8".into(),
-            text: "#cdd6f4".into(),
-            subtext: "#a6adc8".into(),
-            dim: "#6c7086".into(),
-            border: "#45475a".into(),
-            red: "#f38ba8".into(),
-            green: "#a6e3a1".into(),
-            yellow: "#f9e2af".into(),
-            seed_oklch: OklchSeed {
-                lightness: 0.72,
-                chroma: 0.14,
-                hue: 297.0,
-            },
-            dark_mode: true,
-        }
+        Theme::test_fallback()
     }
 
     #[tokio::test]

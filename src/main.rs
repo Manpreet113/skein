@@ -388,28 +388,7 @@ fn broadcast_and_render(
 const WALLPAPER_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
 fn fallback_theme() -> Theme {
-    use color::OklchSeed;
-
-    Theme {
-        background: "#1e1e2e".into(),
-        surface: "#181825".into(),
-        surface_variant: "#313244".into(),
-        primary: "#cba6f7".into(),
-        accent: "#f38ba8".into(),
-        text: "#cdd6f4".into(),
-        subtext: "#a6adc8".into(),
-        dim: "#6c7086".into(),
-        border: "#45475a".into(),
-        red: "#f38ba8".into(),
-        green: "#a6e3a1".into(),
-        yellow: "#f9e2af".into(),
-        seed_oklch: OklchSeed {
-            lightness: 0.72,
-            chroma: 0.14,
-            hue: 297.0,
-        },
-        dark_mode: true,
-    }
+    Theme::test_fallback()
 }
 
 #[cfg(test)]

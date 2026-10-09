@@ -1,0 +1,26 @@
+{# ghostty terminal — include from the ghostty config:
+      config-file = "~/.cache/skein/ghostty.conf"
+    Rendered to: ~/.cache/skein/ghostty.conf
+#}
+background = {{ theme.background }}
+foreground = {{ theme.text }}
+cursor-color = {{ theme.primary }}
+cursor-text = {{ theme.background }}
+selection-background = {{ theme.surface_variant }}
+selection-foreground = {{ theme.text }}
+palette = 0={{ theme.ansi.black }}
+palette = 1={{ theme.ansi.red }}
+palette = 2={{ theme.ansi.green }}
+palette = 3={{ theme.ansi.yellow }}
+palette = 4={{ theme.ansi.blue }}
+palette = 5={{ theme.ansi.magenta }}
+palette = 6={{ theme.ansi.cyan }}
+palette = 7={{ theme.ansi.white }}
+palette = 8={{ theme.ansi.bright_black }}
+palette = 9={{ theme.ansi.bright_red }}
+palette = 10={{ theme.ansi.bright_green }}
+palette = 11={{ theme.ansi.bright_yellow }}
+palette = 12={{ theme.ansi.bright_blue }}
+palette = 13={{ theme.ansi.bright_magenta }}
+palette = 14={{ theme.ansi.bright_cyan }}
+palette = 15={{ theme.ansi.bright_white }}

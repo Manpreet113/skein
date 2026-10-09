@@ -4,7 +4,8 @@
 //! invariants the daemon guarantees to downstream consumers (e.g. a
 //! Quickshell desktop shell):
 //!   * `text` always meets the requested contrast ratio on `background`.
-//!   * `red`/`green`/`yellow` always meet WCAG AA 4.5:1 on `background`.
+//!   * `red`/`green`/`yellow`/`orange`/`purple` always meet WCAG AA 4.5:1.
+//!   * ANSI normals (except near-background black) meet 4.5:1, brights 3.0:1.
 //!   * `dim` always meets 3.0:1 on `background`.
 //!   * every role is a well-formed `#RRGGBB` string.
 
@@ -76,6 +77,8 @@ proptest! {
             ("red", &theme.red),
             ("green", &theme.green),
             ("yellow", &theme.yellow),
+            ("orange", &theme.orange),
+            ("purple", &theme.purple),
         ] {
             let cr = contrast_ratio(&theme.background, role);
             prop_assert!(
@@ -90,6 +93,51 @@ proptest! {
             "dim contrast {dim_cr:.2}:1 below 3.0:1 \
              (seed={hex}, dark={dark}, scheme={scheme:?})"
         );
+    }
+
+    #[test]
+    fn ansi_palette_meets_contrast(
+        hex in arb_hex(),
+        dark in any::<bool>(),
+        scheme in arb_scheme(),
+    ) {
+        let theme = theme_from_seed_hex(&hex, dark, scheme, WCAG_AA_NORMAL).unwrap();
+        let a = &theme.ansi;
+        // Normals (except near-background black) hold body-text contrast.
+        for (name, role) in [
+            ("ansi.red", &a.red),
+            ("ansi.green", &a.green),
+            ("ansi.yellow", &a.yellow),
+            ("ansi.blue", &a.blue),
+            ("ansi.magenta", &a.magenta),
+            ("ansi.cyan", &a.cyan),
+            ("ansi.white", &a.white),
+        ] {
+            let cr = contrast_ratio(&theme.background, role);
+            prop_assert!(
+                cr + 1e-3 >= 4.5,
+                "{name} contrast {cr:.2}:1 below 4.5:1 \
+                 (seed={hex}, dark={dark}, scheme={scheme:?})"
+            );
+        }
+        // Brights hold emphasis-text contrast.
+        for (name, role) in [
+            ("ansi.bright_black", &a.bright_black),
+            ("ansi.bright_red", &a.bright_red),
+            ("ansi.bright_green", &a.bright_green),
+            ("ansi.bright_yellow", &a.bright_yellow),
+            ("ansi.bright_blue", &a.bright_blue),
+            ("ansi.bright_magenta", &a.bright_magenta),
+            ("ansi.bright_cyan", &a.bright_cyan),
+            ("ansi.bright_white", &a.bright_white),
+        ] {
+            let cr = contrast_ratio(&theme.background, role);
+            prop_assert!(
+                cr + 1e-3 >= 3.0,
+                "{name} contrast {cr:.2}:1 below 3.0:1 \
+                 (seed={hex}, dark={dark}, scheme={scheme:?})"
+            );
+        }
     }
 
     #[test]
@@ -112,6 +160,33 @@ proptest! {
             ("red", &theme.red),
             ("green", &theme.green),
             ("yellow", &theme.yellow),
+            ("orange", &theme.orange),
+            ("purple", &theme.purple),
+        ] {
+            let body = role.strip_prefix('#');
+            let ok = body.map(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()));
+            prop_assert!(
+                ok == Some(true),
+                "{name} is not #RRGGBB: {role} (seed={hex})"
+            );
+        }
+        for (name, role) in [
+            ("ansi.black", &theme.ansi.black),
+            ("ansi.red", &theme.ansi.red),
+            ("ansi.green", &theme.ansi.green),
+            ("ansi.yellow", &theme.ansi.yellow),
+            ("ansi.blue", &theme.ansi.blue),
+            ("ansi.magenta", &theme.ansi.magenta),
+            ("ansi.cyan", &theme.ansi.cyan),
+            ("ansi.white", &theme.ansi.white),
+            ("ansi.bright_black", &theme.ansi.bright_black),
+            ("ansi.bright_red", &theme.ansi.bright_red),
+            ("ansi.bright_green", &theme.ansi.bright_green),
+            ("ansi.bright_yellow", &theme.ansi.bright_yellow),
+            ("ansi.bright_blue", &theme.ansi.bright_blue),
+            ("ansi.bright_magenta", &theme.ansi.bright_magenta),
+            ("ansi.bright_cyan", &theme.ansi.bright_cyan),
+            ("ansi.bright_white", &theme.ansi.bright_white),
         ] {
             let body = role.strip_prefix('#');
             let ok = body.map(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()));

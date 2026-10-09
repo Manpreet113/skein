@@ -76,21 +76,24 @@ on first run (never overwritten). Add your own `foo.jinja` → rendered to
 
 ```
 theme.background / surface / surface_variant / primary / accent / text / subtext
-theme.dim / border / red / green / yellow
+theme.dim / border / red / green / yellow / orange / purple
+theme.ansi.{black,red,green,yellow,blue,magenta,cyan,white}
+theme.ansi.{bright_black,bright_red,…,bright_white}
 theme.seed_oklch.{lightness,chroma,hue}  theme.dark_mode
 ```
 
-`text` meets your `--contrast` target on `background`; `red`/`green`/`yellow`
-(fixed semantic hues) always meet 4.5:1 and `dim` meets 3.0:1, so shells can
-bind them directly instead of deriving colors client-side.
+`text` meets your `--contrast` target on `background`; `red`/`green`/`yellow`/
+`orange`/`purple` (fixed semantic hues) always meet 4.5:1, ANSI normals meet
+4.5:1, brights meet 3.0:1, and `dim` meets 3.0:1, so shells can bind them
+directly instead of deriving colors client-side.
 
 The daemon also writes a `theme.json` snapshot of the current theme to
 `~/.cache/skein/theme.json` on every change, for tools that prefer a file over the socket.
 
 Built-in targets: `colors.css` (Waybar/AGS/CSS), `colors.json`, `alacritty.toml`,
 `kitty.conf`, `hyprland.conf`, `rofi.rasi`, `mako`, `gtk.css`, `cava.conf`,
-`dunstrc`, `foot.ini`, `swaylock.conf`,
-`fish-theme.fish`.
+`dunstrc`, `foot.ini`, `swaylock.conf`, `ghostty.conf`, `starship.toml`,
+`btop.theme`, `fish-theme.fish`, `fzf.fish`.
 
 ## Home manager
 

@@ -2,7 +2,7 @@ use ratatui::style::Color;
 
 // Single source of truth: the daemon's Theme type. Re-exported so the rest
 // of skeinc keeps working unchanged.
-pub use skein::color::{OklchSeed, Theme};
+pub use skein::color::Theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorRole {
@@ -18,9 +18,11 @@ pub enum ColorRole {
     Red,
     Green,
     Yellow,
+    Orange,
+    Purple,
 }
 
-pub const ALL_ROLES: [ColorRole; 12] = [
+pub const ALL_ROLES: [ColorRole; 14] = [
     ColorRole::Background,
     ColorRole::Surface,
     ColorRole::SurfaceVariant,
@@ -33,6 +35,8 @@ pub const ALL_ROLES: [ColorRole; 12] = [
     ColorRole::Red,
     ColorRole::Green,
     ColorRole::Yellow,
+    ColorRole::Orange,
+    ColorRole::Purple,
 ];
 
 impl ColorRole {
@@ -50,6 +54,8 @@ impl ColorRole {
             Self::Red => "Red",
             Self::Green => "Green",
             Self::Yellow => "Yellow",
+            Self::Orange => "Orange",
+            Self::Purple => "Purple",
         }
     }
 
@@ -67,6 +73,8 @@ impl ColorRole {
             Self::Red => &t.red,
             Self::Green => &t.green,
             Self::Yellow => &t.yellow,
+            Self::Orange => &t.orange,
+            Self::Purple => &t.purple,
         }
     }
 
@@ -84,6 +92,8 @@ impl ColorRole {
             Self::Red => &mut t.red,
             Self::Green => &mut t.green,
             Self::Yellow => &mut t.yellow,
+            Self::Orange => &mut t.orange,
+            Self::Purple => &mut t.purple,
         }
     }
 }
@@ -175,26 +185,7 @@ impl App {
 }
 
 pub fn fallback_theme() -> Theme {
-    Theme {
-        background: "#1e1e2e".into(),
-        surface: "#181825".into(),
-        surface_variant: "#313244".into(),
-        primary: "#cba6f7".into(),
-        accent: "#f38ba8".into(),
-        text: "#cdd6f4".into(),
-        subtext: "#a6adc8".into(),
-        dim: "#6c7086".into(),
-        border: "#45475a".into(),
-        red: "#f38ba8".into(),
-        green: "#a6e3a1".into(),
-        yellow: "#f9e2af".into(),
-        seed_oklch: OklchSeed {
-            lightness: 0.72,
-            chroma: 0.14,
-            hue: 297.0,
-        },
-        dark_mode: true,
-    }
+    Theme::test_fallback()
 }
 
 pub fn parse_hex_to_ratatui(hex: &str) -> Color {
