@@ -81,6 +81,7 @@ const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
     ("starship.toml.jinja", include_str!("../templates/starship.toml.jinja")),
     ("btop.theme.jinja", include_str!("../templates/btop.theme.jinja")),
     ("fzf.fish.jinja", include_str!("../templates/fzf.fish.jinja")),
+    ("hyprland.lua.jinja", include_str!("../templates/hyprland.lua.jinja")),
 ];
 
 /// Copy any missing builtin templates into `template_dir`.

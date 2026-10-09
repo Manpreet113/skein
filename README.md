@@ -93,7 +93,8 @@ The daemon also writes a `theme.json` snapshot of the current theme to
 Built-in targets: `colors.css` (Waybar/AGS/CSS), `colors.json`, `alacritty.toml`,
 `kitty.conf`, `hyprland.conf`, `rofi.rasi`, `mako`, `gtk.css`, `cava.conf`,
 `dunstrc`, `foot.ini`, `swaylock.conf`, `ghostty.conf`, `starship.toml`,
-`btop.theme`, `fish-theme.fish`, `fzf.fish`.
+`btop.theme`, `fish-theme.fish`, `fzf.fish`, `hyprland.lua` (live border
+colors, sourced via a guarded `dofile` from `hyprland.lua`).
 
 ## Home manager
 
