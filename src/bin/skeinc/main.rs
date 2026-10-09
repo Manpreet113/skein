@@ -68,6 +68,12 @@ enum Command {
         #[arg(long, default_value_t = skein::color::WCAG_AA_NORMAL)]
         contrast: f32,
     },
+    /// Tell the running daemon to re-extract the theme from an explicit
+    /// image path (the handoff for wallpaper pickers), then print the
+    /// resulting theme.
+    Set {
+        path: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -133,6 +139,49 @@ async fn main() -> Result<()> {
 
         println!("Preview rendered to {}", preview_dir.display());
         println!("{}", serde_json::to_string_pretty(&theme)?);
+        return Ok(());
+    }
+
+    if let Some(Command::Set { path }) = &args.command {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+        let path = std::fs::canonicalize(path)
+            .with_context(|| format!("Cannot read {}", path.display()))?;
+        let socket_path = args
+            .socket
+            .clone()
+            .unwrap_or_else(resolve_socket_path);
+        let stream = tokio::net::UnixStream::connect(&socket_path)
+            .await
+            .with_context(|| format!("Cannot connect to {}", socket_path.display()))?;
+        let (read_half, mut write_half) = stream.into_split();
+        let mut lines = tokio::io::BufReader::new(read_half).lines();
+
+        // Discard the cached-theme line the server sends on connect.
+        lines.next_line().await?;
+
+        let cmd = serde_json::json!({"cmd": "set-wallpaper", "path": path}).to_string();
+        write_half.write_all(cmd.as_bytes()).await?;
+        write_half.write_all(b"\n").await?;
+        write_half.flush().await?;
+
+        // Wait for the re-extracted theme broadcast.
+        let updated: Theme = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                match lines.next_line().await? {
+                    Some(line) if !line.trim().is_empty() => {
+                        if let Ok(theme) = serde_json::from_str::<Theme>(&line) {
+                            return Ok::<_, anyhow::Error>(theme);
+                        }
+                    }
+                    Some(_) => continue,
+                    None => anyhow::bail!("daemon closed connection"),
+                }
+            }
+        })
+        .await
+        .context("Timed out waiting for daemon to apply the wallpaper")??;
+        println!("{}", serde_json::to_string_pretty(&updated)?);
         return Ok(());
     }
 

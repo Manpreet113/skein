@@ -1,25 +1,8 @@
 use ratatui::style::Color;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct Theme {
-    pub background: String,
-    pub surface: String,
-    pub surface_variant: String,
-    pub primary: String,
-    pub accent: String,
-    pub text: String,
-    pub subtext: String,
-    pub seed_oklch: OklchSeed,
-    pub dark_mode: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct OklchSeed {
-    pub lightness: f32,
-    pub chroma: f32,
-    pub hue: f32,
-}
+// Single source of truth: the daemon's Theme type. Re-exported so the rest
+// of skeinc keeps working unchanged.
+pub use skein::color::{OklchSeed, Theme};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorRole {
@@ -30,9 +13,14 @@ pub enum ColorRole {
     Accent,
     Text,
     Subtext,
+    Dim,
+    Border,
+    Red,
+    Green,
+    Yellow,
 }
 
-pub const ALL_ROLES: [ColorRole; 7] = [
+pub const ALL_ROLES: [ColorRole; 12] = [
     ColorRole::Background,
     ColorRole::Surface,
     ColorRole::SurfaceVariant,
@@ -40,6 +28,11 @@ pub const ALL_ROLES: [ColorRole; 7] = [
     ColorRole::Accent,
     ColorRole::Text,
     ColorRole::Subtext,
+    ColorRole::Dim,
+    ColorRole::Border,
+    ColorRole::Red,
+    ColorRole::Green,
+    ColorRole::Yellow,
 ];
 
 impl ColorRole {
@@ -52,6 +45,11 @@ impl ColorRole {
             Self::Accent => "Accent",
             Self::Text => "Text",
             Self::Subtext => "Subtext",
+            Self::Dim => "Dim",
+            Self::Border => "Border",
+            Self::Red => "Red",
+            Self::Green => "Green",
+            Self::Yellow => "Yellow",
         }
     }
 
@@ -64,6 +62,11 @@ impl ColorRole {
             Self::Accent => &t.accent,
             Self::Text => &t.text,
             Self::Subtext => &t.subtext,
+            Self::Dim => &t.dim,
+            Self::Border => &t.border,
+            Self::Red => &t.red,
+            Self::Green => &t.green,
+            Self::Yellow => &t.yellow,
         }
     }
 
@@ -76,6 +79,11 @@ impl ColorRole {
             Self::Accent => &mut t.accent,
             Self::Text => &mut t.text,
             Self::Subtext => &mut t.subtext,
+            Self::Dim => &mut t.dim,
+            Self::Border => &mut t.border,
+            Self::Red => &mut t.red,
+            Self::Green => &mut t.green,
+            Self::Yellow => &mut t.yellow,
         }
     }
 }
@@ -175,6 +183,11 @@ pub fn fallback_theme() -> Theme {
         accent: "#f38ba8".into(),
         text: "#cdd6f4".into(),
         subtext: "#a6adc8".into(),
+        dim: "#6c7086".into(),
+        border: "#45475a".into(),
+        red: "#f38ba8".into(),
+        green: "#a6e3a1".into(),
+        yellow: "#f9e2af".into(),
         seed_oklch: OklchSeed {
             lightness: 0.72,
             chroma: 0.14,

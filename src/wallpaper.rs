@@ -77,20 +77,37 @@ pub async fn spawn_wallpaper_monitor(watch_dir: &Path) -> Result<mpsc::Receiver<
 }
 
 async fn find_existing_wallpaper(dir: &Path) -> Option<PathBuf> {
+    // Pick the most recently modified image, not the first directory entry
+    // (read_dir order is arbitrary). A stable choice matters because the
+    // daemon applies this theme immediately on startup.
     let mut entries = tokio::fs::read_dir(dir).await.ok()?;
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
     while let Ok(Some(entry)) = entries.next_entry().await {
         let path = entry.path();
-        if path.is_file() && is_image_file(&path) {
-            return Some(path);
+        if !path.is_file() || !is_image_file(&path) {
+            continue;
+        }
+        let mtime = entry
+            .metadata()
+            .await
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        if newest.as_ref().is_none_or(|(t, _)| mtime > *t) {
+            newest = Some((mtime, path));
         }
     }
-    None
+    newest.map(|(_, path)| path)
 }
 
 fn is_relevant_event(event: &Event) -> bool {
+    // Create/Modify only. Access events are deliberately ignored: tools that
+    // merely *preview* files (thumbnailers, pickers) must not trigger a
+    // re-extract. Explicit selection goes through the `set-wallpaper` IPC
+    // command instead (see `skeinc set`).
     matches!(
         event.kind,
-        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Access(_)
+        EventKind::Create(_) | EventKind::Modify(_)
     )
 }
 

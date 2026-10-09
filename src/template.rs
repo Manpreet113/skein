@@ -41,6 +41,26 @@ use tracing::{debug, info, warn};
 
 use crate::color::Theme;
 
+/// Atomically write the current-theme snapshot (`theme.json`) for
+/// consumers that prefer a file over the socket.
+///
+/// Shared by the daemon broadcast path and the `set-wallpaper` IPC command
+/// so every theme change — however triggered — lands in the same file.
+pub async fn write_snapshot(output_dir: &Path, theme: &Theme) -> Result<()> {
+    let path = output_dir.join("theme.json");
+    let json =
+        serde_json::to_string_pretty(theme).context("Theme JSON serialization failed")?;
+    let tmp = path.with_extension("skein.tmp");
+    fs::write(&tmp, &json)
+        .await
+        .with_context(|| format!("Failed to write {}", tmp.display()))?;
+    fs::rename(&tmp, &path)
+        .await
+        .with_context(|| format!("Failed to rename {} → {}", tmp.display(), path.display()))?;
+    debug!(output = %path.display(), "Theme snapshot written");
+    Ok(())
+}
+
 /// Templates embedded into the binary and seeded into the user's template
 /// directory on first run. Existing user files are never overwritten.
 const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
@@ -258,6 +278,11 @@ mod tests {
             accent: "#f38ba8".into(),
             text: "#cdd6f4".into(),
             subtext: "#a6adc8".into(),
+            dim: "#6c7086".into(),
+            border: "#45475a".into(),
+            red: "#f38ba8".into(),
+            green: "#a6e3a1".into(),
+            yellow: "#f9e2af".into(),
             seed_oklch: OklchSeed {
                 lightness: 0.72,
                 chroma: 0.14,

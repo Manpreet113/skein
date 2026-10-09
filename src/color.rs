@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 
 /// A fully resolved theme palette, ready for JSON serialization.
 /// All colors are encoded as `#RRGGBB` hex strings.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Theme {
     /// Very dark background (dark mode) or very light (light mode).
     pub background: String,
@@ -49,6 +49,17 @@ pub struct Theme {
     pub text: String,
     /// Slightly lower-contrast subtext, ≥ 3.0:1 on `background`.
     pub subtext: String,
+    /// Dimmed text for disabled/placeholder content, ≥ 3.0:1 on `background`
+    /// but dimmer than `subtext`.
+    pub dim: String,
+    /// UI stroke color derived from the surface ramp (not text-contrast enforced).
+    pub border: String,
+    /// Status red, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
+    pub red: String,
+    /// Status green, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
+    pub green: String,
+    /// Status yellow, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
+    pub yellow: String,
     /// Raw Oklch seed for downstream manipulation (e.g. QML).
     pub seed_oklch: OklchSeed,
     /// Whether we're operating in dark or light mode.
@@ -57,7 +68,7 @@ pub struct Theme {
 
 /// The raw Oklch seed color, exposed so downstream clients can derive
 /// their own tones without re-doing the math.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct OklchSeed {
     pub lightness: f32,
     pub chroma: f32,
@@ -126,6 +137,14 @@ impl std::str::FromStr for Scheme {
 
 pub const WCAG_AA_NORMAL: f32 = 4.5;
 const WCAG_AA_LARGE: f32 = 3.0;
+
+/// Guard band added to contrast targets inside [`enforce_contrast`].
+/// The loop lands exactly on the pass boundary; hex quantization and
+/// cross-implementation differences in the sRGB transfer function can shave
+/// ~0.04 off the ratio as measured elsewhere (e.g. in QML). A 0.05 margin
+/// keeps the *emitted* color above target under any correct WCAG math, at
+/// negligible visual cost.
+const CONTRAST_GUARD: f32 = 0.05;
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -334,10 +353,13 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 ///   background:     0.12
 ///   surface:        0.17
 ///   surface_variant:0.22
+///   border:         surface_variant ± 0.07 (lighter in dark, darker in light)
 ///   primary:        seed_l clamped [0.45, 0.70]
 ///   accent:         primary_l + 0.12 clamped [0.55, 0.82]
-///   text:           nudged until WCAG AA ≥ 4.5 on background
+///   text:           nudged until WCAG ≥ `contrast` on background
 ///   subtext:        nudged until WCAG ≥ 3.0 on background
+///   dim:            nudged from near-background until WCAG ≥ 3.0
+///   red/green/yellow: fixed hues (30/150/105), nudged until WCAG ≥ 4.5
 /// ```
 fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) -> Theme {
     let h = seed.hue;
@@ -394,6 +416,47 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
         WCAG_AA_LARGE,
     );
 
+    // Dimmed text: start near the background and walk outward until ≥ 3.0,
+    // landing dimmer than subtext while staying legible.
+    let (dim_start, dim_step) = if dark {
+        (0.30_f32, 0.01_f32)
+    } else {
+        (0.70_f32, -0.01_f32)
+    };
+    let dim = enforce_contrast(bg_l, c_surface * 0.2, h, dim_start, dim_step, WCAG_AA_LARGE);
+
+    // UI stroke: one step above the surface ramp, no text-contrast requirement.
+    let border_l = if dark {
+        (sfv_l + 0.07).clamp(0.0, 0.999)
+    } else {
+        (sfv_l - 0.07).clamp(0.0, 0.999)
+    };
+    let border = oklch_to_hex(Oklch::new(border_l, c_surface * 0.7, h));
+
+    // Status colors keep fixed semantic hues (red ~30°, green ~150°,
+    // yellow ~105° in Oklch) with the scheme's chroma, then get the same
+    // contrast-walk as text so they stay legible on `background`.
+    // Walk direction always heads *away* from the background so the loop
+    // converges even for mid-range starts.
+    let (status_start, status_step) = if dark {
+        (0.70_f32, 0.01_f32)
+    } else {
+        (0.40_f32, -0.01_f32)
+    };
+    let status = |hue_deg: f32| {
+        enforce_contrast(
+            bg_l,
+            c_primary,
+            palette::OklabHue::new(hue_deg),
+            status_start,
+            status_step,
+            WCAG_AA_NORMAL.max(contrast),
+        )
+    };
+    let red = status(30.0);
+    let green = status(150.0);
+    let yellow = status(105.0);
+
     Theme {
         background,
         surface,
@@ -402,6 +465,11 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
         accent,
         text,
         subtext,
+        dim,
+        border,
+        red,
+        green,
+        yellow,
         seed_oklch: OklchSeed {
             lightness: seed.l,
             chroma: seed.chroma,
@@ -432,17 +500,21 @@ fn enforce_contrast(
     step: f32,
     target_cr: f32,
 ) -> String {
-    let bg_color: Srgb<f32> = Oklch::new(bg_l_oklch, c * 0.0, h).into_color();
-    let bg_lum = wcag_luminance(bg_color);
+    // Measure the background exactly as it will be emitted (hex-quantized),
+    // so the guarantee holds for the bytes downstream actually reads.
+    let bg_lum = wcag_luminance(parse_hex(&oklch_to_hex(Oklch::new(bg_l_oklch, 0.0, h))));
 
     let mut l = start_l.clamp(0.001, 0.999);
 
     for _ in 0..200 {
-        let candidate: Srgb<f32> = Oklch::new(l, c, h).into_color();
-        let fg_lum = wcag_luminance(candidate);
+        // Measure the gamut-clamped, u8-quantized candidate — not the raw
+        // Oklch value — so a boundary landing can't slip under target after
+        // hex encoding.
+        let hex = oklch_to_hex(Oklch::new(l, c, h));
+        let fg_lum = wcag_luminance(parse_hex(&hex));
 
         let cr = contrast_ratio(bg_lum, fg_lum);
-        if cr >= target_cr {
+        if cr >= target_cr + CONTRAST_GUARD {
             break;
         }
 
@@ -467,6 +539,16 @@ fn wcag_luminance(color: Srgb<f32>) -> f32 {
 fn contrast_ratio(l1: f32, l2: f32) -> f32 {
     let (lighter, darker) = if l1 > l2 { (l1, l2) } else { (l2, l1) };
     (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Parse a `#RRGGBB` string (typically our own [`oklch_to_hex`] output)
+/// back to sRGB. Malformed input falls back to black.
+fn parse_hex(hex: &str) -> Srgb<f32> {
+    let h = hex.trim_start_matches('#');
+    let ch = |i: usize| {
+        u8::from_str_radix(h.get(i..i + 2).unwrap_or("00"), 16).unwrap_or(0) as f32 / 255.0
+    };
+    Srgb::new(ch(0), ch(2), ch(4))
 }
 
 // ---------------------------------------------------------------------------
@@ -533,6 +615,48 @@ mod tests {
         assert!(theme.background.starts_with('#'));
         assert!(theme.text.starts_with('#'));
         assert!(theme.seed_oklch.hue > 280.0 && theme.seed_oklch.hue < 310.0);
+    }
+
+    #[test]
+    fn status_colors_meet_wcag_aa() {
+        for dark in [true, false] {
+            for scheme in [Scheme::Vibrant, Scheme::Tonal, Scheme::Muted] {
+                let theme =
+                    theme_from_seed_hex("#783CC8", dark, scheme, WCAG_AA_NORMAL).unwrap();
+                let bg = hex_to_srgb(&theme.background).unwrap();
+                let bg_lum = wcag_luminance(bg);
+                for (name, hex) in [
+                    ("red", &theme.red),
+                    ("green", &theme.green),
+                    ("yellow", &theme.yellow),
+                ] {
+                    let fg = hex_to_srgb(hex).unwrap();
+                    let cr = contrast_ratio(bg_lum, wcag_luminance(fg));
+                    assert!(
+                        cr >= 4.5,
+                        "{name} contrast {cr:.2}:1 below 4.5:1 (dark={dark}, scheme={scheme:?})"
+                    );
+                }
+                let dim = hex_to_srgb(&theme.dim).unwrap();
+                let cr = contrast_ratio(bg_lum, wcag_luminance(dim));
+                assert!(
+                    cr >= 3.0,
+                    "dim contrast {cr:.2}:1 below 3.0:1 (dark={dark}, scheme={scheme:?})"
+                );
+                for (name, hex) in [
+                    ("border", &theme.border),
+                    ("red", &theme.red),
+                    ("green", &theme.green),
+                    ("yellow", &theme.yellow),
+                    ("dim", &theme.dim),
+                ] {
+                    assert!(
+                        hex.len() == 7 && hex.starts_with('#'),
+                        "{name} is not #RRGGBB: {hex}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

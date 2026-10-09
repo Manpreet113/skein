@@ -4,7 +4,8 @@
 //
 // Architecture:
 //   A `tokio::net::UnixListener` accepts incoming connections.
-//   Each accepted stream is stored in a `ClientSet` (behind a `Mutex`).
+//   Each accepted stream contributes its write-half to a `ClientSet`
+//   (behind a `Mutex`) and spawns a reader task for client→daemon messages.
 //   When a new `Theme` arrives on the `watch::Receiver`, the broadcaster
 //   task fans out the JSON payload to all currently-connected clients.
 //
@@ -18,7 +19,8 @@
 //   │       ▼ new client               ▼ theme changed                   │
 //   │  push OwnedWriteHalf    lock ClientSet                              │
 //   │  into ClientSet         for each client: write JSON + '\n'          │
-//   │                         prune dead clients (write error)            │
+//   │  spawn reader task      prune dead clients (write error)            │
+//   │  (patches + commands)                                               │
 //   └─────────────────────────────────────────────────────────────────────┘
 //
 // PERFORMANCE NOTES:
@@ -32,16 +34,17 @@
 //     contention entirely.
 // =============================================================================
 
-use std::{path::Path, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use anyhow::{Context, Result};
+use serde::Deserialize;
 use tokio::{
     net::{UnixListener, UnixStream},
     sync::{watch, Mutex},
 };
 use tracing::{debug, error, info, warn};
 
-use crate::color::Theme;
+use crate::color::{Scheme, Theme};
 use crate::template::TemplateRenderer;
 
 
@@ -49,22 +52,62 @@ use crate::template::TemplateRenderer;
 // Client registry
 // ---------------------------------------------------------------------------
 
+/// Commands a client can send to the daemon (one JSON object per line).
+///
+/// `Theme` patches (sent by `skeinc` tweaking) are still accepted as bare
+/// theme objects. Commands use a tagged envelope so the two never collide.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "cmd", rename_all = "kebab-case")]
+pub enum ClientCommand {
+    /// Re-extract the theme from an explicit image path and broadcast it.
+    /// This is the handoff for wallpaper pickers: instead of pointing the
+    /// daemon at a directory full of previews (which would spam
+    /// re-extracts), the picker calls `skeinc set <path>` once the user
+    /// confirms a choice.
+    SetWallpaper {
+        path: PathBuf,
+    },
+}
+
 /// The set of active client write-halves.
 ///
 /// We own the `OwnedWriteHalf` so that we can write to each client
-/// independently.  The `OwnedReadHalf` is discarded after accepting —
-/// we don't expect clients to send us anything (publish-only socket).
+/// independently.
 type ClientSet = Arc<Mutex<Vec<tokio::net::unix::OwnedWriteHalf>>>;
 
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
+/// Reader/writer configuration captured for command handling.
+#[derive(Debug, Clone)]
+struct CommandCtx {
+    prefer_dark: bool,
+    scheme: Scheme,
+    contrast: f32,
+    output_dir: PathBuf,
+}
+
+/// Static configuration for the IPC server (extraction parameters used when
+/// executing client commands such as `set-wallpaper`).
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    /// Directory receiving rendered templates and `theme.json`.
+    pub output_dir: PathBuf,
+    /// Color mode for command-triggered extractions.
+    pub prefer_dark: bool,
+    /// Palette scheme for command-triggered extractions.
+    pub scheme: Scheme,
+    /// Text contrast target for command-triggered extractions.
+    pub contrast: f32,
+}
+
 /// Spawn two long-lived tasks:
 /// 1. `accept_task` — continuously accepts new UDS connections.
 /// 2. `broadcast_task` — fires whenever the theme `watch` changes.
 ///
-/// Both tasks share the `ClientSet` via `Arc<Mutex<_>>`.
+/// Clients may also send commands (see [`ClientCommand`]); accepted themes
+/// and command results are fanned out through the same `watch` channel.
 ///
 /// # Socket lifecycle
 /// The socket file at `socket_path` is removed on startup if it already
@@ -76,6 +119,7 @@ pub async fn spawn_ipc_tasks(
     theme_tx: watch::Sender<Arc<Theme>>,
     theme_rx: watch::Receiver<Arc<Theme>>,
     renderer: Arc<TemplateRenderer>,
+    server: ServerConfig,
 ) -> Result<()> {
     // Remove a stale socket file if present.
     if socket_path.exists() {
@@ -90,6 +134,12 @@ pub async fn spawn_ipc_tasks(
     info!(socket = %socket_path.display(), "IPC socket listening");
 
     let clients: ClientSet = Arc::new(Mutex::new(Vec::new()));
+    let cmd_ctx = CommandCtx {
+        prefer_dark: server.prefer_dark,
+        scheme: server.scheme,
+        contrast: server.contrast,
+        output_dir: server.output_dir,
+    };
 
     // Spawn accept loop.
     let accept_clients = Arc::clone(&clients);
@@ -99,6 +149,7 @@ pub async fn spawn_ipc_tasks(
         theme_tx,
         theme_rx.clone(),
         renderer,
+        cmd_ctx,
     ));
 
     // Spawn broadcaster.
@@ -119,6 +170,7 @@ async fn accept_task(
     theme_tx: watch::Sender<Arc<Theme>>,
     theme_rx: watch::Receiver<Arc<Theme>>,
     renderer: Arc<TemplateRenderer>,
+    cmd_ctx: CommandCtx,
 ) {
     loop {
         match listener.accept().await {
@@ -130,6 +182,7 @@ async fn accept_task(
                     &theme_tx,
                     &theme_rx,
                     &renderer,
+                    cmd_ctx.clone(),
                 )
                 .await;
             }
@@ -148,6 +201,7 @@ async fn on_new_client(
     theme_tx: &watch::Sender<Arc<Theme>>,
     theme_rx: &watch::Receiver<Arc<Theme>>,
     renderer: &Arc<TemplateRenderer>,
+    cmd_ctx: CommandCtx,
 ) {
     use tokio::io::AsyncWriteExt;
 
@@ -161,27 +215,34 @@ async fn on_new_client(
         let _ = write_half.flush().await;
     }
 
-    // Spawn reader task to receive patches pushed back from skeinc.
+    // Spawn reader task to receive patches and commands pushed from clients.
     tokio::spawn(client_read_task(
         read_half,
         theme_tx.clone(),
         Arc::clone(renderer),
+        cmd_ctx,
     ));
 
     clients.lock().await.push(write_half);
 }
 
-/// Reads incoming JSON lines from a client (e.g. skeinc tweaking state).
-/// Pushes the new Theme into `theme_tx` and re-renders templates to disk.
+/// Reads incoming JSON lines from a client:
+///   * bare `Theme` objects (e.g. skeinc tweaking state) are applied directly;
+///   * [`ClientCommand`] envelopes (e.g. `set-wallpaper`) are executed and
+///     their results broadcast like any other theme change.
 async fn client_read_task(
     read_half: tokio::net::unix::OwnedReadHalf,
     theme_tx: watch::Sender<Arc<Theme>>,
     renderer: Arc<TemplateRenderer>,
+    cmd_ctx: CommandCtx,
 ) {
     use tokio::io::AsyncBufReadExt;
     let mut lines = tokio::io::BufReader::new(read_half).lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
+        if line.trim().is_empty() {
+            continue;
+        }
         if let Ok(theme) = serde_json::from_str::<Theme>(&line) {
             let arc_theme = Arc::new(theme);
             info!(
@@ -189,12 +250,75 @@ async fn client_read_task(
                 primary = %arc_theme.primary,
                 "Received theme patch from IPC client"
             );
-            let _ = theme_tx.send(Arc::clone(&arc_theme));
-            let renderer = Arc::clone(&renderer);
-            tokio::spawn(async move {
-                let _ = renderer.render_all(&arc_theme).await;
-            });
+            apply_theme(arc_theme, &theme_tx, &renderer, &cmd_ctx.output_dir);
+            continue;
         }
+        match serde_json::from_str::<ClientCommand>(&line) {
+            Ok(ClientCommand::SetWallpaper { path }) => {
+                handle_set_wallpaper(path, &theme_tx, &renderer, &cmd_ctx).await;
+            }
+            Err(e) => {
+                debug!(error = %e, "Ignoring unparsable IPC line");
+            }
+        }
+    }
+}
+
+/// Publish a theme to subscribers, re-render templates, and refresh the
+/// `theme.json` snapshot — the single fan-out path for every theme change.
+fn apply_theme(
+    theme: Arc<Theme>,
+    theme_tx: &watch::Sender<Arc<Theme>>,
+    renderer: &Arc<TemplateRenderer>,
+    output_dir: &Path,
+) {
+    let _ = theme_tx.send(Arc::clone(&theme));
+    let renderer = Arc::clone(renderer);
+    let output_dir = output_dir.to_path_buf();
+    tokio::spawn(async move {
+        if let Err(e) = renderer.render_all(&theme).await {
+            warn!(error = %e, "Template render pass failed");
+        }
+        if let Err(e) = crate::template::write_snapshot(&output_dir, &theme).await {
+            warn!(error = %e, "Theme snapshot write failed");
+        }
+    });
+}
+
+/// Execute `set-wallpaper`: read + extract the image at `path`, then fan the
+/// resulting theme out through the normal broadcast path.
+async fn handle_set_wallpaper(
+    path: PathBuf,
+    theme_tx: &watch::Sender<Arc<Theme>>,
+    renderer: &Arc<TemplateRenderer>,
+    cmd_ctx: &CommandCtx,
+) {
+    info!(path = %path.display(), "IPC set-wallpaper request");
+    let bytes = match tokio::fs::read(&path).await {
+        Ok(b) => b,
+        Err(e) => {
+            warn!(path = %path.display(), error = %e, "set-wallpaper: failed to read image");
+            return;
+        }
+    };
+    let CommandCtx {
+        prefer_dark,
+        scheme,
+        contrast,
+        ..
+    } = *cmd_ctx;
+    let theme_res = tokio::task::spawn_blocking(move || {
+        crate::color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
+    })
+    .await;
+    match theme_res {
+        Ok(Ok(theme)) => {
+            let arc_theme = Arc::new(theme);
+            info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying IPC wallpaper theme");
+            apply_theme(arc_theme, theme_tx, renderer, &cmd_ctx.output_dir);
+        }
+        Ok(Err(e)) => warn!(error = %e, "set-wallpaper: theme extraction failed"),
+        Err(e) => warn!(error = %e, "set-wallpaper: extraction task panicked"),
     }
 }
 
@@ -296,6 +420,11 @@ mod tests {
             accent: "#e94560".into(),
             text: "#eaeaea".into(),
             subtext: "#a8a8b3".into(),
+            dim: "#6c7086".into(),
+            border: "#45475a".into(),
+            red: "#f38ba8".into(),
+            green: "#a6e3a1".into(),
+            yellow: "#f9e2af".into(),
             seed_oklch: OklchSeed {
                 lightness: 0.55,
                 chroma: 0.14,
@@ -315,7 +444,20 @@ mod tests {
         let out_dir = dir.path().join("out");
         let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
 
-        spawn_ipc_tasks(&socket_path, tx.clone(), rx, renderer).await.unwrap();
+        spawn_ipc_tasks(
+            &socket_path,
+            tx.clone(),
+            rx,
+            renderer,
+            ServerConfig {
+                output_dir: out_dir.clone(),
+                prefer_dark: true,
+                scheme: Scheme::Tonal,
+                contrast: 4.5,
+            },
+        )
+        .await
+        .unwrap();
 
         // Give the accept task time to start.
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -359,7 +501,20 @@ mod tests {
         let out_dir = dir.path().join("out");
         let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
 
-        spawn_ipc_tasks(&socket_path, tx.clone(), rx.clone(), renderer).await.unwrap();
+        spawn_ipc_tasks(
+            &socket_path,
+            tx.clone(),
+            rx.clone(),
+            renderer,
+            ServerConfig {
+                output_dir: out_dir.clone(),
+                prefer_dark: true,
+                scheme: Scheme::Tonal,
+                contrast: 4.5,
+            },
+        )
+        .await
+        .unwrap();
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let mut client = tokio::net::UnixStream::connect(&socket_path).await.unwrap();
@@ -385,5 +540,73 @@ mod tests {
         })
         .await
         .expect("Daemon watch channel did not receive client patch within 2s");
+    }
+
+    #[tokio::test]
+    async fn test_set_wallpaper_command_updates_daemon() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+        let dir = tempfile::tempdir().unwrap();
+        let socket_path = dir.path().join("skein.sock");
+
+        let (tx, mut rx) = watch::channel(Arc::new(dummy_theme()));
+        let tmpl_dir = dir.path().join("tmpl");
+        let out_dir = dir.path().join("out");
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+
+        spawn_ipc_tasks(
+            &socket_path,
+            tx.clone(),
+            rx.clone(),
+            renderer,
+            ServerConfig {
+                output_dir: out_dir.clone(),
+                prefer_dark: true,
+                scheme: Scheme::Tonal,
+                contrast: 4.5,
+            },
+        )
+        .await
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // A solid-red still life as the "wallpaper".
+        let img_path = dir.path().join("wall.png");
+        image::RgbImage::from_pixel(8, 8, image::Rgb([200, 40, 60]))
+            .save(&img_path)
+            .unwrap();
+
+        let client = tokio::net::UnixStream::connect(&socket_path).await.unwrap();
+
+        // Discard the cached-theme line the server sends on connect.
+        let mut lines = tokio::io::BufReader::new(client).lines();
+        lines.next_line().await.unwrap();
+        let mut client = lines.into_inner();
+
+        let cmd = serde_json::json!({"cmd": "set-wallpaper", "path": img_path}).to_string();
+        client.write_all(cmd.as_bytes()).await.unwrap();
+        client.write_all(b"\n").await.unwrap();
+        client.flush().await.unwrap();
+
+        // Wait for the extracted theme (background must change).
+        tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                rx.changed().await.unwrap();
+                if rx.borrow().background != "#1a1a2e" {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("Daemon did not apply set-wallpaper within 5s");
+
+        // Snapshot file was refreshed as well.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !out_dir.join("theme.json").exists() {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        })
+        .await
+        .expect("theme.json snapshot was not written");
     }
 }

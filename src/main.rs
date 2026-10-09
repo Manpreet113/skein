@@ -95,7 +95,7 @@ struct FileConfig {
 /// Expand a leading `~` or `~/` to the user's home directory.
 fn expand_tilde(p: PathBuf) -> PathBuf {
     match p.to_str() {
-        Some(s) if s == "~" => dirs_next::home_dir().unwrap_or(p),
+        Some("~") => dirs_next::home_dir().unwrap_or(p),
         Some(s) if s.starts_with("~/") => {
             match dirs_next::home_dir() {
                 Some(home) => home.join(&s[2..]),
@@ -200,7 +200,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "skeind=info,warn".into()),
+                .unwrap_or_else(|_| "skeind=info,skein=info,warn".into()),
         )
         .with_target(false)
         .compact()
@@ -258,6 +258,12 @@ async fn main() -> Result<()> {
         theme_tx.clone(),
         theme_rx,
         Arc::clone(&renderer),
+        ipc::ServerConfig {
+            output_dir: config.output_dir.clone(),
+            prefer_dark: config.prefer_dark,
+            scheme: config.scheme,
+            contrast: config.contrast,
+        },
     )
     .await
     .context("Failed to start IPC server")?;
@@ -301,32 +307,48 @@ async fn main() -> Result<()> {
             }
 
             maybe_wall = wallpaper_rx.recv() => {
-                match maybe_wall {
-                    Some(event) => {
-                        info!(path = %event.path.display(), "Wallpaper event triggered");
-                        if let Ok(bytes) = tokio::fs::read(&event.path).await {
-                            let prefer_dark = config.prefer_dark;
-                            let scheme = config.scheme;
-                            let contrast = config.contrast;
-                            let theme_res = tokio::task::spawn_blocking(move || {
-                                color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
-                            })
-                            .await;
-
-                            match theme_res {
-                                Ok(Ok(theme)) => {
-                                    let arc_theme = Arc::new(theme);
-                                    info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
-                                    broadcast_and_render(&arc_theme, &theme_tx, &renderer, &config.output_dir);
-                                }
-                                Ok(Err(e)) => warn!(error = %e, "Theme extraction failed"),
-                                Err(e) => warn!(error = %e, "Theme extraction task panicked"),
-                            }
+                // Debounce: collapse a burst of events (e.g. a picker
+                // previewing many files) into the latest path, then extract
+                // once after a quiet period.
+                let Some(first) = maybe_wall else {
+                    warn!("Wallpaper channel closed");
+                    break;
+                };
+                let mut latest = first;
+                let mut closed = false;
+                loop {
+                    match tokio::time::timeout(WALLPAPER_DEBOUNCE, wallpaper_rx.recv()).await {
+                        Ok(Some(event)) => latest = event,
+                        Ok(None) => {
+                            closed = true;
+                            break;
                         }
+                        // Timeout: quiet period elapsed, process `latest`.
+                        Err(_) => break,
                     }
-                    None => {
-                        warn!("Wallpaper channel closed");
-                        break;
+                }
+                if closed {
+                    warn!("Wallpaper channel closed");
+                    break;
+                }
+                info!(path = %latest.path.display(), "Wallpaper event triggered");
+                if let Ok(bytes) = tokio::fs::read(&latest.path).await {
+                    let prefer_dark = config.prefer_dark;
+                    let scheme = config.scheme;
+                    let contrast = config.contrast;
+                    let theme_res = tokio::task::spawn_blocking(move || {
+                        color::extract_theme_from_bytes(&bytes, prefer_dark, scheme, contrast)
+                    })
+                    .await;
+
+                    match theme_res {
+                        Ok(Ok(theme)) => {
+                            let arc_theme = Arc::new(theme);
+                            info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
+                            broadcast_and_render(&arc_theme, &theme_tx, &renderer, &config.output_dir);
+                        }
+                        Ok(Err(e)) => warn!(error = %e, "Theme extraction failed"),
+                        Err(e) => warn!(error = %e, "Theme extraction task panicked"),
                     }
                 }
             }
@@ -350,19 +372,20 @@ fn broadcast_and_render(
     let _ = theme_tx.send(Arc::clone(theme));
     let renderer = Arc::clone(renderer);
     let theme_for_tmpl = Arc::clone(theme);
-    let snapshot_path = output_dir.join("theme.json");
+    let output_dir = output_dir.to_path_buf();
     tokio::spawn(async move {
         if let Err(e) = renderer.render_all(&theme_for_tmpl).await {
             warn!(error = %e, "Template render pass failed");
         }
-        if let Ok(json) = serde_json::to_string_pretty(&*theme_for_tmpl) {
-            let tmp = snapshot_path.with_extension("skein.tmp");
-            if tokio::fs::write(&tmp, &json).await.is_ok() {
-                let _ = tokio::fs::rename(&tmp, &snapshot_path).await;
-            }
+        if let Err(e) = template::write_snapshot(&output_dir, &theme_for_tmpl).await {
+            warn!(error = %e, "Theme snapshot write failed");
         }
     });
 }
+
+/// Quiet period collapsing bursty filesystem events (thumbnailers, batch
+/// copies, editor save-rename cycles) into a single extraction.
+const WALLPAPER_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
 
 fn fallback_theme() -> Theme {
     use color::OklchSeed;
@@ -375,6 +398,11 @@ fn fallback_theme() -> Theme {
         accent: "#f38ba8".into(),
         text: "#cdd6f4".into(),
         subtext: "#a6adc8".into(),
+        dim: "#6c7086".into(),
+        border: "#45475a".into(),
+        red: "#f38ba8".into(),
+        green: "#a6e3a1".into(),
+        yellow: "#f9e2af".into(),
         seed_oklch: OklchSeed {
             lightness: 0.72,
             chroma: 0.14,
