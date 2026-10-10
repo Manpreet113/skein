@@ -1,0 +1,76 @@
+{# Waybar color theme — import at the top of ~/.config/waybar/style.css:
+      @import "/home/you/.cache/skein/waybar.css";
+   then use @skein_* below or in your own rules. Selectors follow
+   `man 5 waybar-styles` (window#waybar, #workspaces button, per-module
+   ids, and the .warning/.critical/.charging state classes).
+   Rendered to: ~/.cache/skein/waybar.css
+#}
+@define-color skein_bg {{ theme.background }};
+@define-color skein_surface {{ theme.surface }};
+@define-color skein_primary {{ theme.primary }};
+@define-color skein_accent {{ theme.accent }};
+@define-color skein_text {{ theme.text }};
+@define-color skein_subtext {{ theme.subtext }};
+@define-color skein_dim {{ theme.dim }};
+@define-color skein_border {{ theme.border }};
+@define-color skein_error {{ theme.error }};
+@define-color skein_success {{ theme.success }};
+@define-color skein_warning {{ theme.warning }};
+
+window#waybar {
+  background-color: @skein_bg;
+  border-bottom: 1px solid @skein_border;
+  color: @skein_text;
+}
+
+#workspaces button {
+  color: @skein_subtext;
+  background-color: transparent;
+}
+
+#workspaces button.active {
+  color: @skein_bg;
+  background-color: @skein_primary;
+}
+
+#workspaces button.urgent {
+  color: @skein_bg;
+  background-color: @skein_error;
+}
+
+#workspaces button:hover {
+  color: @skein_text;
+  background-color: @skein_surface;
+}
+
+#clock,
+#battery,
+#network,
+#pulseaudio,
+#tray,
+#custom-skein {
+  color: @skein_text;
+}
+
+#battery.warning {
+  color: @skein_warning;
+}
+
+#battery.critical:not(.charging) {
+  color: @skein_error;
+}
+
+#battery.charging {
+  color: @skein_success;
+}
+
+#network.disconnected,
+#pulseaudio.muted {
+  color: @skein_dim;
+}
+
+tooltip {
+  background-color: @skein_surface;
+  border: 1px solid @skein_border;
+  color: @skein_text;
+}

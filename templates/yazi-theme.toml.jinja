@@ -1,0 +1,43 @@
+{# yazi file-manager theme — copy to ~/.config/yazi/theme.toml (it
+   overrides the built-in dark/light presets). Styles follow the yazi
+   theme docs: `{ fg = "#hex", bg = "#hex" }` tables under [mgr],
+   [tabs], [mode], [status], [notify] and friends.
+   Rendered to: ~/.cache/skein/yazi-theme.toml
+#}
+[mgr]
+cwd = { fg = "{{ theme.primary }}" }
+find_keyword = { fg = "{{ theme.accent }}", bold = true }
+border_style = { fg = "{{ theme.border }}" }
+
+[tabs]
+active = { fg = "{{ theme.background }}", bg = "{{ theme.primary }}", bold = true }
+inactive = { fg = "{{ theme.subtext }}", bg = "{{ theme.surface }}" }
+
+[mode]
+normal_main = { fg = "{{ theme.background }}", bg = "{{ theme.primary }}", bold = true }
+select_main = { fg = "{{ theme.background }}", bg = "{{ theme.warning }}", bold = true }
+
+[status]
+overall = { fg = "{{ theme.text }}", bg = "{{ theme.surface }}" }
+perm_type = { fg = "{{ theme.primary }}" }
+perm_read = { fg = "{{ theme.success }}" }
+perm_write = { fg = "{{ theme.warning }}" }
+perm_exec = { fg = "{{ theme.error }}" }
+progress_normal = { fg = "{{ theme.success }}", bg = "{{ theme.surface_variant }}" }
+progress_error = { fg = "{{ theme.warning }}", bg = "{{ theme.error }}" }
+
+[notify]
+title_info = { fg = "{{ theme.success }}" }
+title_warn = { fg = "{{ theme.warning }}" }
+title_error = { fg = "{{ theme.error }}" }
+
+[confirm]
+border = { fg = "{{ theme.primary }}" }
+title = { fg = "{{ theme.primary }}" }
+
+[pick]
+border = { fg = "{{ theme.primary }}" }
+active = { fg = "{{ theme.accent }}", bold = true }
+
+[input]
+border = { fg = "{{ theme.primary }}" }

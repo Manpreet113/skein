@@ -1,6 +1,8 @@
 {# skein — colors.css.jinja
-   Hot-reloadable CSS custom properties.
-   Works with Waybar, AGS, Quickshell, or any CSS file watcher.
+   CSS custom properties (`:root` variables) for web-tech consumers
+   (browser overlays, dashboards, anything parsing real CSS).
+   GTK-based apps (Waybar, AGS, Quickshell-adjacent tooling) do NOT
+   understand `:root` variables — point those at gtk.css instead.
    Rendered to: ~/.cache/skein/colors.css
 #}
 :root {

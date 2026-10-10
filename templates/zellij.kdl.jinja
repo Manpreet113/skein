@@ -1,0 +1,22 @@
+{# zellij color theme — copy the `skein` block into your config.kdl
+   `themes {}` section (or save this file under your zellij `theme_dir`),
+   then set `theme "skein"`. Colors may be `r g b` decimals or quoted hex;
+   hex is used here. `orange` maps to the warning role (zellij's simple
+   theme format has an orange slot and no warning slot).
+   Rendered to: ~/.cache/skein/zellij.kdl
+#}
+themes {
+    skein {
+        fg "{{ theme.text }}"
+        bg "{{ theme.background }}"
+        black "{{ theme.ansi.black }}"
+        red "{{ theme.ansi.red }}"
+        green "{{ theme.ansi.green }}"
+        yellow "{{ theme.ansi.yellow }}"
+        blue "{{ theme.ansi.blue }}"
+        magenta "{{ theme.ansi.magenta }}"
+        cyan "{{ theme.ansi.cyan }}"
+        white "{{ theme.ansi.white }}"
+        orange "{{ theme.warning }}"
+    }
+}

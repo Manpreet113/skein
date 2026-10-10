@@ -74,7 +74,7 @@ const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
     ("gtk.css.jinja", include_str!("../templates/gtk.css.jinja")),
     ("cava.conf.jinja", include_str!("../templates/cava.conf.jinja")),
     ("fish-theme.fish.jinja", include_str!("../templates/fish-theme.fish.jinja")),
-    ("dunstrc.jinja", include_str!("../templates/dunstrc.jinja")),
+    ("dunst.conf.jinja", include_str!("../templates/dunst.conf.jinja")),
     ("foot.ini.jinja", include_str!("../templates/foot.ini.jinja")),
     ("swaylock.conf.jinja", include_str!("../templates/swaylock.conf.jinja")),
     ("ghostty.conf.jinja", include_str!("../templates/ghostty.conf.jinja")),
@@ -82,6 +82,19 @@ const BUILTIN_TEMPLATES: &[(&str, &str)] = &[
     ("btop.theme.jinja", include_str!("../templates/btop.theme.jinja")),
     ("fzf.fish.jinja", include_str!("../templates/fzf.fish.jinja")),
     ("hyprland.lua.jinja", include_str!("../templates/hyprland.lua.jinja")),
+    ("hyprlock.conf.jinja", include_str!("../templates/hyprlock.conf.jinja")),
+    ("swaync.css.jinja", include_str!("../templates/swaync.css.jinja")),
+    ("wlogout.css.jinja", include_str!("../templates/wlogout.css.jinja")),
+    ("waybar.css.jinja", include_str!("../templates/waybar.css.jinja")),
+    ("fuzzel.ini.jinja", include_str!("../templates/fuzzel.ini.jinja")),
+    ("zellij.kdl.jinja", include_str!("../templates/zellij.kdl.jinja")),
+    ("tmux.conf.jinja", include_str!("../templates/tmux.conf.jinja")),
+    ("yazi-theme.toml.jinja", include_str!("../templates/yazi-theme.toml.jinja")),
+    ("tide-theme.fish.jinja", include_str!("../templates/tide-theme.fish.jinja")),
+    ("skein.theme.css.jinja", include_str!("../templates/skein.theme.css.jinja")),
+    ("skein-color-theme.json.jinja", include_str!("../templates/skein-color-theme.json.jinja")),
+    ("skein.lua.jinja", include_str!("../templates/skein.lua.jinja")),
+    ("zen-userChrome.css.jinja", include_str!("../templates/zen-userChrome.css.jinja")),
 ];
 
 /// Copy any missing builtin templates into `template_dir`.
@@ -102,6 +115,51 @@ pub async fn seed_builtin_templates(template_dir: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Build the `theme_rgb` template context: every role as an `[r, g, b]`
+/// decimal triple mirroring the `theme` hex strings.
+fn rgb_context(theme: &Theme) -> serde_json::Value {
+    let triple = |hex: &str| {
+        let h = hex.trim_start_matches('#');
+        let ch = |i: usize| {
+            u8::from_str_radix(h.get(i..i + 2).unwrap_or("00"), 16).unwrap_or(0)
+        };
+        serde_json::json!([ch(0), ch(2), ch(4)])
+    };
+    let a = &theme.ansi;
+    serde_json::json!({
+        "background": triple(&theme.background),
+        "surface": triple(&theme.surface),
+        "surface_variant": triple(&theme.surface_variant),
+        "primary": triple(&theme.primary),
+        "accent": triple(&theme.accent),
+        "text": triple(&theme.text),
+        "subtext": triple(&theme.subtext),
+        "dim": triple(&theme.dim),
+        "border": triple(&theme.border),
+        "error": triple(&theme.error),
+        "success": triple(&theme.success),
+        "warning": triple(&theme.warning),
+        "ansi": {
+            "black": triple(&a.black),
+            "red": triple(&a.red),
+            "green": triple(&a.green),
+            "yellow": triple(&a.yellow),
+            "blue": triple(&a.blue),
+            "magenta": triple(&a.magenta),
+            "cyan": triple(&a.cyan),
+            "white": triple(&a.white),
+            "bright_black": triple(&a.bright_black),
+            "bright_red": triple(&a.bright_red),
+            "bright_green": triple(&a.bright_green),
+            "bright_yellow": triple(&a.bright_yellow),
+            "bright_blue": triple(&a.bright_blue),
+            "bright_magenta": triple(&a.bright_magenta),
+            "bright_cyan": triple(&a.bright_cyan),
+            "bright_white": triple(&a.bright_white),
+        },
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -210,6 +268,10 @@ impl TemplateRenderer {
         // This is a cheap in-process serialization, not file I/O.
         let theme_value =
             serde_json::to_value(theme).context("Failed to serialize Theme for template context")?;
+        // Decimal RGB triples for consumers that cannot parse hex (e.g.
+        // hyprlock's `rgb(R, G, B)`). Use with the `join` filter:
+        //   rgb({{ theme_rgb.background | join(", ") }})
+        let theme_rgb = rgb_context(theme);
 
         // Phase 1: Render all templates while holding the lock.
         // All rendering is synchronous (CPU-bound, fast), so we do it all in one
@@ -221,7 +283,7 @@ impl TemplateRenderer {
                 .filter_map(|(template_name, out_path)| {
                     match env.get_template(template_name) {
                         Ok(tmpl) => {
-                            match tmpl.render(minijinja::context! { theme => &theme_value }) {
+                            match tmpl.render(minijinja::context! { theme => &theme_value, theme_rgb => &theme_rgb }) {
                                 Ok(rendered) => Some((out_path.clone(), rendered)),
                                 Err(e) => {
                                     warn!(template = %template_name, error = %e, "Template render error");

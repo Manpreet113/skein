@@ -1,0 +1,16 @@
+{# tmux color snippet — load it from ~/.tmux.conf with:
+      source-file ~/.cache/skein/tmux.conf
+   Only status line, pane border, message and window styles are set here;
+   layout and keybindings stay in your own config. tmux accepts #RRGGBB.
+   Rendered to: ~/.cache/skein/tmux.conf
+#}
+set -g status-style "bg={{ theme.surface }},fg={{ theme.text }}"
+set -g status-left-style "bg={{ theme.primary }},fg={{ theme.background }}"
+set -g status-right-style "bg={{ theme.surface }},fg={{ theme.subtext }}"
+set -g window-status-style "fg={{ theme.subtext }}"
+set -g window-status-current-style "bg={{ theme.primary }},fg={{ theme.background }},bold"
+set -g pane-border-style "fg={{ theme.border }}"
+set -g pane-active-border-style "fg={{ theme.primary }}"
+set -g message-style "bg={{ theme.surface_variant }},fg={{ theme.text }}"
+set -g message-command-style "bg={{ theme.surface_variant }},fg={{ theme.text }}"
+set -g mode-style "bg={{ theme.surface_variant }},fg={{ theme.text }}"

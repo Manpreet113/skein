@@ -1,11 +1,13 @@
-{# dunst 1.13+ — import from dunstrc:  include = ~/.cache/skein/dunstrc
+{# dunst — dunst has no `include` directive. Consume this as a drop-in:
+      ln -s ~/.cache/skein/dunst.conf ~/.config/dunst/dunstrc.d/99-skein.conf
+   then `pkill dunst` (it reloads on next notification). Only color keys
+   are set here; geometry stays in your dunstrc.
 #}
 [global]
 background = "{{ theme.background }}"
 foreground = "{{ theme.text }}"
 frame_color = "{{ theme.primary }}"
 highlight = "{{ theme.accent }}"
-corner_radius = 8
 
 [urgency_low]
 background = "{{ theme.surface }}"
@@ -19,5 +21,5 @@ frame_color = "{{ theme.primary }}"
 
 [urgency_critical]
 background = "{{ theme.background }}"
-foreground = "{{ theme.accent }}"
-frame_color = "{{ theme.accent }}"
+foreground = "{{ theme.text }}"
+frame_color = "{{ theme.error }}"

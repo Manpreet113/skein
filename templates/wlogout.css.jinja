@@ -1,0 +1,40 @@
+{# wlogout color theme — replace ~/.config/wlogout/style.css with this
+   file (wlogout reads style.css next to its layout file; pass `-C` for a
+   custom path). Selectors are plain GTK CSS: `window`, `button` and the
+   `#label` ids from your layout file. Icons come from your layout, so
+   only chrome colors are themed here.
+   Rendered to: ~/.cache/skein/wlogout.css
+#}
+@define-color skein_bg {{ theme.background }};
+@define-color skein_surface {{ theme.surface }};
+@define-color skein_primary {{ theme.primary }};
+@define-color skein_text {{ theme.text }};
+@define-color skein_subtext {{ theme.subtext }};
+@define-color skein_border {{ theme.border }};
+
+* {
+  background-image: none;
+  box-shadow: none;
+}
+
+window {
+  background-color: @skein_bg;
+}
+
+button {
+  border-radius: 12px;
+  border: 1px solid @skein_border;
+  color: @skein_text;
+  background-color: @skein_surface;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 25%;
+}
+
+button:focus,
+button:active,
+button:hover {
+  background-color: @skein_primary;
+  color: @skein_bg;
+  outline-style: none;
+}

@@ -1,0 +1,37 @@
+{# Zen Browser theme — copy to <profile>/chrome/zen-userChrome.css and
+   @import it from userChrome.css (with
+   toolkit.legacyUserProfileCustomizations.stylesheets enabled).
+   Overrides established Zen variables (--zen-*) plus standard Firefox
+   chrome variables. Scoped to the matching prefers-color-scheme so one
+   file stays correct after mode flips.
+   Rendered to: ~/.cache/skein/zen-userChrome.css
+#}
+@media (prefers-color-scheme: {{ "dark" if theme.dark_mode else "light" }}) {
+  :root {
+    --zen-bg-primary: {{ theme.surface }} !important;
+    --zen-tertiary-bg: {{ theme.background }} !important;
+    --zen-bg-alt: {{ theme.background }} !important;
+    --zen-bg-sidebar: {{ theme.background }} !important;
+    --zen-color-accent: {{ theme.accent }} !important;
+    --zen-text-primary: {{ theme.text }} !important;
+    --zen-tab-selected-text: {{ theme.background }} !important;
+    --zen-tab-selected-background: {{ theme.primary }} !important;
+    --zen-select-bg: {{ theme.surface_variant }} !important;
+    --zen-colors-primary: {{ theme.surface }} !important;
+    --zen-colors-secondary: {{ theme.surface_variant }} !important;
+    --zen-themed-toolbar-bg: {{ theme.surface }} !important;
+    --zen-main-browser-background: {{ theme.background }} !important;
+    --newtab-background-color: {{ theme.background }} !important;
+    --arrowpanel-background: {{ theme.surface_variant }} !important;
+    --arrowpanel-color: {{ theme.text }} !important;
+    --lwt-sidebar-background-color: {{ theme.background }} !important;
+    --zen-primary-color: {{ theme.primary }} !important;
+    --zen-colors-border: {{ theme.border }} !important;
+    --toolbarbutton-icon-fill: {{ theme.accent }} !important;
+    --lwt-text-color: {{ theme.text }} !important;
+    --toolbar-field-color: {{ theme.text }} !important;
+    --toolbar-bgcolor: {{ theme.surface }} !important;
+    --toolbar-color: {{ theme.text }} !important;
+    --lwt-accent-color: {{ theme.background }} !important;
+  }
+}

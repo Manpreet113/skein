@@ -1,0 +1,24 @@
+{# hyprlock color variables — consume via `source` from hyprlock.conf:
+      source = /home/you/.cache/skein/hyprlock.conf
+   then reference the variables in your own widgets, e.g.:
+      label {
+          color = $skein_text
+      }
+      input-field {
+          outer_color = $skein_primary
+          inner_color = $skein_surface
+          font_color = $skein_text
+          fail_color = $skein_error
+      }
+   Colors use decimal rgb() (unambiguous per the wiki).
+   Rendered to: ~/.cache/skein/hyprlock.conf
+#}
+$skein_background = rgb({{ theme_rgb.background | join(", ") }})
+$skein_surface = rgb({{ theme_rgb.surface | join(", ") }})
+$skein_primary = rgb({{ theme_rgb.primary | join(", ") }})
+$skein_accent = rgb({{ theme_rgb.accent | join(", ") }})
+$skein_text = rgb({{ theme_rgb.text | join(", ") }})
+$skein_subtext = rgb({{ theme_rgb.subtext | join(", ") }})
+$skein_error = rgb({{ theme_rgb.error | join(", ") }})
+$skein_success = rgb({{ theme_rgb.success | join(", ") }})
+$skein_warning = rgb({{ theme_rgb.warning | join(", ") }})

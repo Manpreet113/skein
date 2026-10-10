@@ -1,0 +1,19 @@
+{# fuzzel launcher colors — merge the [colors] section into
+   ~/.config/fuzzel/fuzzel.ini (or point fuzzel at this file with
+   `--config`, adding your own [main]/[border] sections).
+   Colors are RRGGBBAA (fuzzel requires the alpha suffix; skein emits
+   fully opaque `ff` — edit the suffix if you want translucency).
+   Rendered to: ~/.cache/skein/fuzzel.ini
+#}
+[colors]
+background={{ theme.background | replace("#", "") }}ff
+text={{ theme.text | replace("#", "") }}ff
+prompt={{ theme.primary | replace("#", "") }}ff
+placeholder={{ theme.dim | replace("#", "") }}ff
+input={{ theme.text | replace("#", "") }}ff
+match={{ theme.accent | replace("#", "") }}ff
+selection={{ theme.surface_variant | replace("#", "") }}ff
+selection-text={{ theme.text | replace("#", "") }}ff
+selection-match={{ theme.accent | replace("#", "") }}ff
+counter={{ theme.dim | replace("#", "") }}ff
+border={{ theme.primary | replace("#", "") }}ff

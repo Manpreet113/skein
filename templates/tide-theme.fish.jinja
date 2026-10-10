@@ -1,0 +1,39 @@
+{# Tide prompt (fish) structural colors — source once from your fish config:
+      source ~/.cache/skein/tide-theme.fish
+   Applies with `set -U` (universal, like `tide configure` itself), so the
+   colors persist. Only structural colors are themed — per-tool brand
+   colors (node/go/rust/…) are left to Tide on purpose.
+   Rendered to: ~/.cache/skein/tide-theme.fish
+#}
+set -U tide_character_color {{ theme.success | replace("#", "") }}
+set -U tide_character_color_failure {{ theme.error | replace("#", "") }}
+set -U tide_pwd_color_anchors {{ theme.accent | replace("#", "") }}
+set -U tide_pwd_color_dirs {{ theme.primary | replace("#", "") }}
+set -U tide_pwd_color_truncated_dirs {{ theme.subtext | replace("#", "") }}
+set -U tide_git_color_branch {{ theme.success | replace("#", "") }}
+set -U tide_git_color_conflicted {{ theme.error | replace("#", "") }}
+set -U tide_git_color_dirty {{ theme.warning | replace("#", "") }}
+set -U tide_git_color_operation {{ theme.error | replace("#", "") }}
+set -U tide_git_color_staged {{ theme.warning | replace("#", "") }}
+set -U tide_git_color_stash {{ theme.success | replace("#", "") }}
+set -U tide_git_color_untracked {{ theme.accent | replace("#", "") }}
+set -U tide_git_color_upstream {{ theme.success | replace("#", "") }}
+set -U tide_status_color {{ theme.success | replace("#", "") }}
+set -U tide_status_color_failure {{ theme.error | replace("#", "") }}
+set -U tide_time_color {{ theme.dim | replace("#", "") }}
+set -U tide_cmd_duration_color {{ theme.dim | replace("#", "") }}
+set -U tide_jobs_color {{ theme.primary | replace("#", "") }}
+set -U tide_context_color_default {{ theme.subtext | replace("#", "") }}
+set -U tide_context_color_root {{ theme.warning | replace("#", "") }}
+set -U tide_context_color_ssh {{ theme.subtext | replace("#", "") }}
+set -U tide_direnv_color {{ theme.warning | replace("#", "") }}
+set -U tide_direnv_color_denied {{ theme.error | replace("#", "") }}
+set -U tide_nix_shell_color {{ theme.accent | replace("#", "") }}
+set -U tide_private_mode_color {{ theme.text | replace("#", "") }}
+set -U tide_prompt_color_frame_and_connection {{ theme.dim | replace("#", "") }}
+set -U tide_prompt_color_separator_same_color {{ theme.dim | replace("#", "") }}
+set -U tide_shlvl_color {{ theme.subtext | replace("#", "") }}
+set -U tide_vi_mode_color_default {{ theme.subtext | replace("#", "") }}
+set -U tide_vi_mode_color_insert {{ theme.accent | replace("#", "") }}
+set -U tide_vi_mode_color_replace {{ theme.success | replace("#", "") }}
+set -U tide_vi_mode_color_visual {{ theme.warning | replace("#", "") }}

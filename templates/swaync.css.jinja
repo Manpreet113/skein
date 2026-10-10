@@ -1,0 +1,90 @@
+{# SwayNotificationCenter color theme — replace ~/.config/swaync/style.css
+   with this file (or @import it), then `swaync-client --reload-css`.
+   Selectors follow the widget classes documented in `man 5 swaync`
+   (.control-center, .widget-title, .widget-dnd, .widget-mpris-*,
+   .widget-buttons-grid, .floating-notifications) plus the widely-used
+   per-severity notification classes (.low/.normal/.critical).
+   Rendered to: ~/.cache/skein/swaync.css
+#}
+@define-color skein_bg {{ theme.background }};
+@define-color skein_surface {{ theme.surface }};
+@define-color skein_surface_variant {{ theme.surface_variant }};
+@define-color skein_primary {{ theme.primary }};
+@define-color skein_accent {{ theme.accent }};
+@define-color skein_text {{ theme.text }};
+@define-color skein_subtext {{ theme.subtext }};
+@define-color skein_dim {{ theme.dim }};
+@define-color skein_border {{ theme.border }};
+@define-color skein_error {{ theme.error }};
+@define-color skein_success {{ theme.success }};
+@define-color skein_warning {{ theme.warning }};
+
+.control-center {
+  background: @skein_bg;
+  border: 1px solid @skein_border;
+  color: @skein_text;
+}
+
+.control-center .widget-title {
+  color: @skein_text;
+}
+
+.control-center .widget-title button {
+  background: @skein_surface_variant;
+  color: @skein_text;
+  border: 1px solid @skein_border;
+}
+
+.control-center .widget-dnd {
+  color: @skein_subtext;
+}
+
+.control-center .widget-mpris .widget-mpris-player {
+  background: @skein_surface;
+  border: 1px solid @skein_border;
+}
+
+.control-center .widget-mpris .widget-mpris-title {
+  color: @skein_text;
+}
+
+.control-center .widget-mpris .widget-mpris-subtitle {
+  color: @skein_subtext;
+}
+
+.widget-buttons-grid button {
+  background: @skein_surface_variant;
+  color: @skein_text;
+}
+
+.widget-buttons-grid button:hover {
+  background: @skein_primary;
+  color: @skein_bg;
+}
+
+.floating-notifications .notification,
+.control-center .notification {
+  background: @skein_surface;
+  border: 1px solid @skein_border;
+  color: @skein_text;
+}
+
+.floating-notifications .notification.critical,
+.control-center .notification.critical {
+  border: 1px solid @skein_error;
+}
+
+.floating-notifications .notification.low,
+.control-center .notification.low {
+  color: @skein_subtext;
+}
+
+.close-button {
+  background: @skein_surface_variant;
+  color: @skein_text;
+}
+
+.close-button:hover {
+  background: @skein_error;
+  color: @skein_bg;
+}

@@ -96,11 +96,17 @@ exception, not a leak.
 The daemon also writes a `theme.json` snapshot of the current theme to
 `~/.cache/skein/theme.json` on every change, for tools that prefer a file over the socket.
 
-Built-in targets: `colors.css` (Waybar/AGS/CSS), `colors.json`, `alacritty.toml`,
-`kitty.conf`, `hyprland.conf`, `rofi.rasi`, `mako`, `gtk.css`, `cava.conf`,
-`dunstrc`, `foot.ini`, `swaylock.conf`, `ghostty.conf`, `starship.toml`,
-`btop.theme`, `fish-theme.fish`, `fzf.fish`, `hyprland.lua` (live border
-colors, sourced via a guarded `dofile` from `hyprland.lua`).
+Built-in targets: `colors.css` (plain CSS vars), `colors.json`, `alacritty.toml`,
+`kitty.conf`, `hyprland.conf`, `hyprland.lua` (live border colors, sourced via
+a guarded `dofile`), `hyprlock.conf` (`source`-able `$skein_*` variables),
+`rofi.rasi`, `mako`, `dunst.conf` (drop-in for `dunstrc.d/`), `swaync.css`,
+`waybar.css`, `wlogout.css`, `gtk.css`, `cava.conf`, `foot.ini`,
+`swaylock.conf`, `ghostty.conf`, `fuzzel.ini`, `starship.toml`, `btop.theme`,
+`fish-theme.fish`, `fzf.fish`, `zellij.kdl`, `tmux.conf`, `yazi-theme.toml`,
+`tide-theme.fish` (structural prompt colors via universal vars),
+`skein.theme.css` (Vencord/Vesktop theme), `skein-color-theme.json` (VS Code
+theme + terminal + syntax tokens), `skein.lua` (Neovim colorscheme),
+`zen-userChrome.css` (Zen Browser chrome variables).
 
 ## Home manager
 

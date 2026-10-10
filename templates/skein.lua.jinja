@@ -1,0 +1,91 @@
+{# Neovim colorscheme — copy to ~/.config/nvim/colors/skein.lua, then
+   `:colorscheme skein`. Sets ~45 highlight groups via nvim_set_hl plus
+   the 16 terminal colors. Rendered to: ~/.cache/skein/skein.lua
+#}
+vim.cmd("hi clear")
+vim.g.colors_name = "skein"
+
+local hl = vim.api.nvim_set_hl
+
+hl(0, "Normal", { fg = "{{ theme.text }}", bg = "{{ theme.background }}" })
+hl(0, "Comment", { fg = "{{ theme.dim }}", italic = true })
+hl(0, "Constant", { fg = "{{ theme.warning }}" })
+hl(0, "String", { fg = "{{ theme.success }}" })
+hl(0, "Character", { fg = "{{ theme.success }}" })
+hl(0, "Number", { fg = "{{ theme.warning }}" })
+hl(0, "Boolean", { fg = "{{ theme.warning }}" })
+hl(0, "Float", { fg = "{{ theme.warning }}" })
+hl(0, "Identifier", { fg = "{{ theme.text }}" })
+hl(0, "Function", { fg = "{{ theme.accent }}" })
+hl(0, "Statement", { fg = "{{ theme.primary }}" })
+hl(0, "Conditional", { fg = "{{ theme.primary }}" })
+hl(0, "Repeat", { fg = "{{ theme.primary }}" })
+hl(0, "Label", { fg = "{{ theme.primary }}" })
+hl(0, "Operator", { fg = "{{ theme.subtext }}" })
+hl(0, "Keyword", { fg = "{{ theme.primary }}" })
+hl(0, "Exception", { fg = "{{ theme.error }}" })
+hl(0, "PreProc", { fg = "{{ theme.accent }}" })
+hl(0, "Include", { fg = "{{ theme.accent }}" })
+hl(0, "Define", { fg = "{{ theme.accent }}" })
+hl(0, "Macro", { fg = "{{ theme.accent }}" })
+hl(0, "Type", { fg = "{{ theme.accent }}" })
+hl(0, "StorageClass", { fg = "{{ theme.primary }}" })
+hl(0, "Structure", { fg = "{{ theme.accent }}" })
+hl(0, "Typedef", { fg = "{{ theme.accent }}" })
+hl(0, "Special", { fg = "{{ theme.accent }}" })
+hl(0, "SpecialComment", { fg = "{{ theme.dim }}" })
+hl(0, "Error", { fg = "{{ theme.error }}" })
+hl(0, "Todo", { fg = "{{ theme.background }}", bg = "{{ theme.warning }}", bold = true })
+hl(0, "Underlined", { fg = "{{ theme.accent }}", underline = true })
+hl(0, "CursorLine", { bg = "{{ theme.surface }}" })
+hl(0, "CursorLineNr", { fg = "{{ theme.primary }}", bold = true })
+hl(0, "LineNr", { fg = "{{ theme.dim }}" })
+hl(0, "SignColumn", { fg = "{{ theme.dim }}", bg = "{{ theme.background }}" })
+hl(0, "Visual", { fg = "{{ theme.background }}", bg = "{{ theme.primary }}" })
+hl(0, "Search", { fg = "{{ theme.background }}", bg = "{{ theme.warning }}" })
+hl(0, "IncSearch", { fg = "{{ theme.background }}", bg = "{{ theme.accent }}" })
+hl(0, "StatusLine", { fg = "{{ theme.text }}", bg = "{{ theme.surface_variant }}" })
+hl(0, "StatusLineNC", { fg = "{{ theme.subtext }}", bg = "{{ theme.surface }}" })
+hl(0, "Pmenu", { fg = "{{ theme.text }}", bg = "{{ theme.surface }}" })
+hl(0, "PmenuSel", { fg = "{{ theme.background }}", bg = "{{ theme.primary }}" })
+hl(0, "PmenuSbar", { bg = "{{ theme.surface_variant }}" })
+hl(0, "PmenuThumb", { bg = "{{ theme.subtext }}" })
+hl(0, "NormalFloat", { fg = "{{ theme.text }}", bg = "{{ theme.surface }}" })
+hl(0, "FloatBorder", { fg = "{{ theme.border }}", bg = "{{ theme.surface }}" })
+hl(0, "WinSeparator", { fg = "{{ theme.border }}" })
+hl(0, "DiffAdd", { fg = "{{ theme.success }}", bg = "{{ theme.surface }}" })
+hl(0, "DiffChange", { fg = "{{ theme.warning }}", bg = "{{ theme.surface }}" })
+hl(0, "DiffDelete", { fg = "{{ theme.error }}", bg = "{{ theme.surface }}" })
+hl(0, "DiffText", { fg = "{{ theme.background }}", bg = "{{ theme.warning }}" })
+hl(0, "DiagnosticError", { fg = "{{ theme.error }}" })
+hl(0, "DiagnosticWarn", { fg = "{{ theme.warning }}" })
+hl(0, "DiagnosticInfo", { fg = "{{ theme.accent }}" })
+hl(0, "DiagnosticHint", { fg = "{{ theme.subtext }}" })
+hl(0, "GitSignsAdd", { fg = "{{ theme.success }}" })
+hl(0, "GitSignsChange", { fg = "{{ theme.warning }}" })
+hl(0, "GitSignsDelete", { fg = "{{ theme.error }}" })
+hl(0, "@comment", { link = "Comment" })
+hl(0, "@string", { link = "String" })
+hl(0, "@function", { link = "Function" })
+hl(0, "@keyword", { link = "Keyword" })
+hl(0, "@type", { link = "Type" })
+hl(0, "@variable", { link = "Identifier" })
+hl(0, "@number", { link = "Number" })
+hl(0, "@operator", { link = "Operator" })
+
+vim.g.terminal_color_0 = "{{ theme.ansi.black }}"
+vim.g.terminal_color_1 = "{{ theme.ansi.red }}"
+vim.g.terminal_color_2 = "{{ theme.ansi.green }}"
+vim.g.terminal_color_3 = "{{ theme.ansi.yellow }}"
+vim.g.terminal_color_4 = "{{ theme.ansi.blue }}"
+vim.g.terminal_color_5 = "{{ theme.ansi.magenta }}"
+vim.g.terminal_color_6 = "{{ theme.ansi.cyan }}"
+vim.g.terminal_color_7 = "{{ theme.ansi.white }}"
+vim.g.terminal_color_8 = "{{ theme.ansi.bright_black }}"
+vim.g.terminal_color_9 = "{{ theme.ansi.bright_red }}"
+vim.g.terminal_color_10 = "{{ theme.ansi.bright_green }}"
+vim.g.terminal_color_11 = "{{ theme.ansi.bright_yellow }}"
+vim.g.terminal_color_12 = "{{ theme.ansi.bright_blue }}"
+vim.g.terminal_color_13 = "{{ theme.ansi.bright_magenta }}"
+vim.g.terminal_color_14 = "{{ theme.ansi.bright_cyan }}"
+vim.g.terminal_color_15 = "{{ theme.ansi.bright_white }}"
