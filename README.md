@@ -76,16 +76,22 @@ on first run (never overwritten). Add your own `foo.jinja` → rendered to
 
 ```
 theme.background / surface / surface_variant / primary / accent / text / subtext
-theme.dim / border / red / green / yellow / orange / purple
+theme.dim / border / error / success / warning
 theme.ansi.{black,red,green,yellow,blue,magenta,cyan,white}
 theme.ansi.{bright_black,bright_red,…,bright_white}
 theme.seed_oklch.{lightness,chroma,hue}  theme.dark_mode
 ```
 
-`text` meets your `--contrast` target on `background`; `red`/`green`/`yellow`/
-`orange`/`purple` (fixed semantic hues) always meet 4.5:1, ANSI normals meet
-4.5:1, brights meet 3.0:1, and `dim` meets 3.0:1, so shells can bind them
+Role names are semantic, not hues: `error`/`success`/`warning` live in the
+red/green/amber families by spec (destructive actions use `error`) and always
+meet 4.5:1 on `background`; `text` meets your `--contrast` target; `dim`
+meets 3.0:1; ANSI normals meet 4.5:1 and brights 3.0:1 — so shells bind them
 directly instead of deriving colors client-side.
+
+Grayscale in, grayscale out: seeds below ~0.015 chroma keep ~zero chroma in
+every tonal role (no invented tints). Status and ANSI roles keep the scheme's
+minimum chroma so they stay distinguishable — a deliberate, documented
+exception, not a leak.
 
 The daemon also writes a `theme.json` snapshot of the current theme to
 `~/.cache/skein/theme.json` on every change, for tools that prefer a file over the socket.

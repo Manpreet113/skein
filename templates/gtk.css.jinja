@@ -12,11 +12,9 @@
 @define-color skein_subtext {{ theme.subtext }};
 @define-color skein_dim {{ theme.dim }};
 @define-color skein_border {{ theme.border }};
-@define-color skein_red {{ theme.red }};
-@define-color skein_green {{ theme.green }};
-@define-color skein_yellow {{ theme.yellow }};
-@define-color skein_orange {{ theme.orange }};
-@define-color skein_purple {{ theme.purple }};
+@define-color skein_error {{ theme.error }};
+@define-color skein_success {{ theme.success }};
+@define-color skein_warning {{ theme.warning }};
 
 /* Standard GTK3 theme colors — honoured by most GTK3 apps. */
 @define-color theme_bg_color {{ theme.background }};
@@ -35,26 +33,26 @@
 @define-color theme_unfocused_base_color {{ theme.surface }};
 @define-color theme_unfocused_selected_bg_color {{ theme.surface_variant }};
 @define-color borders {{ theme.border }};
-@define-color warning_color {{ theme.yellow }};
-@define-color error_color {{ theme.red }};
-@define-color success_color {{ theme.green }};
+@define-color warning_color {{ theme.warning }};
+@define-color error_color {{ theme.error }};
+@define-color success_color {{ theme.success }};
 
 /* libadwaita / GTK4 palette — honoured by Adwaita-style apps. */
 @define-color accent_bg_color {{ theme.primary }};
 @define-color accent_fg_color {{ theme.background }};
 @define-color accent_color {{ theme.accent }};
-@define-color destructive_bg_color {{ theme.red }};
+@define-color destructive_bg_color {{ theme.error }};
 @define-color destructive_fg_color {{ theme.background }};
-@define-color destructive_color {{ theme.red }};
-@define-color success_bg_color {{ theme.green }};
+@define-color destructive_color {{ theme.error }};
+@define-color success_bg_color {{ theme.success }};
 @define-color success_fg_color {{ theme.background }};
-@define-color success_color {{ theme.green }};
-@define-color warning_bg_color {{ theme.yellow }};
+@define-color success_color {{ theme.success }};
+@define-color warning_bg_color {{ theme.warning }};
 @define-color warning_fg_color {{ theme.background }};
-@define-color warning_color {{ theme.yellow }};
-@define-color error_bg_color {{ theme.red }};
+@define-color warning_color {{ theme.warning }};
+@define-color error_bg_color {{ theme.error }};
 @define-color error_fg_color {{ theme.background }};
-@define-color error_color {{ theme.red }};
+@define-color error_color {{ theme.error }};
 @define-color window_bg_color {{ theme.background }};
 @define-color window_fg_color {{ theme.text }};
 @define-color view_bg_color {{ theme.surface }};

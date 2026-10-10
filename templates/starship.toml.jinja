@@ -2,7 +2,7 @@
     Point starship at it:  STARSHIP_CONFIG=~/.cache/skein/starship.toml
     Rendered to: ~/.cache/skein/starship.toml
 #}
-format = """[](color_orange)$os$username[](bg:color_yellow fg:color_orange)$directory[](fg:color_yellow bg:color_aqua)$git_branch$git_status[](fg:color_aqua bg:color_blue)$c$rust$golang$nodejs$php$java$kotlin$haskell$python[](fg:color_blue bg:color_bg3)$docker_context$conda[](fg:color_bg3 bg:color_bg1)$time[ ](fg:color_bg1)$line_break$character"""
+format = """[](color_warning)$os$username[](bg:color_warning fg:color_warning)$directory[](fg:color_warning bg:color_aqua)$git_branch$git_status[](fg:color_aqua bg:color_blue)$c$rust$golang$nodejs$php$java$kotlin$haskell$python[](fg:color_blue bg:color_bg3)$docker_context$conda[](fg:color_bg3 bg:color_bg1)$time[ ](fg:color_bg1)$line_break$character"""
 palette = "skein"
 
 [palettes.skein]
@@ -11,15 +11,13 @@ color_bg1 = "{{ theme.surface }}"
 color_bg3 = "{{ theme.surface_variant }}"
 color_blue = "{{ theme.primary }}"
 color_aqua = "{{ theme.accent }}"
-color_green = "{{ theme.green }}"
-color_orange = "{{ theme.orange }}"
-color_purple = "{{ theme.purple }}"
-color_red = "{{ theme.red }}"
-color_yellow = "{{ theme.yellow }}"
+color_success = "{{ theme.success }}"
+color_error = "{{ theme.error }}"
+color_warning = "{{ theme.warning }}"
 
 [os]
 disabled = false
-style = "bg:color_orange fg:color_fg0"
+style = "bg:color_warning fg:color_fg0"
 [os.symbols]
 NixOS = " "
 Arch = " "
@@ -27,12 +25,12 @@ Ubuntu = " "
 
 [username]
 show_always = true
-style_user = "bg:color_orange fg:color_fg0"
-style_root = "bg:color_orange fg:color_fg0"
+style_user = "bg:color_warning fg:color_fg0"
+style_root = "bg:color_warning fg:color_fg0"
 format = "[ $user ]($style)"
 
 [directory]
-style = "fg:color_fg0 bg:color_yellow"
+style = "fg:color_fg0 bg:color_warning"
 format = "[ $path ]($style)"
 truncation_length = 3
 truncation_symbol = "…/"
@@ -81,6 +79,6 @@ format = "[[  $time ](fg:color_fg0 bg:color_bg1)]($style)"
 disabled = false
 
 [character]
-success_symbol = "[❯](bold fg:color_green)"
-error_symbol = "[❯](bold fg:color_red)"
-vimcmd_symbol = "[❮](bold fg:color_green)"
+success_symbol = "[❯](bold fg:color_success)"
+error_symbol = "[❯](bold fg:color_error)"
+vimcmd_symbol = "[❮](bold fg:color_success)"

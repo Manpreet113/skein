@@ -4,11 +4,12 @@
 //! invariants the daemon guarantees to downstream consumers (e.g. a
 //! Quickshell desktop shell):
 //!   * `text` always meets the requested contrast ratio on `background`.
-//!   * `red`/`green`/`yellow`/`orange`/`purple` always meet WCAG AA 4.5:1.
+//!   * `error`/`success`/`warning` always meet WCAG AA 4.5:1 on `background`.
 //!   * ANSI normals (except near-background black) meet 4.5:1, brights 3.0:1.
 //!   * `dim` always meets 3.0:1 on `background`.
 //!   * every role is a well-formed `#RRGGBB` string.
 
+use palette::{IntoColor, Oklab, Oklch, Srgb};
 use proptest::prelude::*;
 use skein::color::{theme_from_seed_hex, Scheme, WCAG_AA_NORMAL};
 
@@ -49,6 +50,15 @@ fn contrast_ratio(bg_hex: &str, fg_hex: &str) -> f32 {
     (lighter + 0.05) / (darker + 0.05)
 }
 
+fn chroma_of(hex: &str) -> f32 {
+    let h = hex.trim_start_matches('#');
+    let ch = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).unwrap() as f32 / 255.0;
+    let srgb = Srgb::new(ch(0), ch(2), ch(4));
+    let oklab: Oklab<f32> = srgb.into_color();
+    let oklch: Oklch<f32> = oklab.into_color();
+    oklch.chroma
+}
+
 proptest! {
     #[test]
     fn text_meets_requested_contrast(
@@ -74,11 +84,9 @@ proptest! {
     ) {
         let theme = theme_from_seed_hex(&hex, dark, scheme, WCAG_AA_NORMAL).unwrap();
         for (name, role) in [
-            ("red", &theme.red),
-            ("green", &theme.green),
-            ("yellow", &theme.yellow),
-            ("orange", &theme.orange),
-            ("purple", &theme.purple),
+            ("error", &theme.error),
+            ("success", &theme.success),
+            ("warning", &theme.warning),
         ] {
             let cr = contrast_ratio(&theme.background, role);
             prop_assert!(
@@ -157,11 +165,9 @@ proptest! {
             ("subtext", &theme.subtext),
             ("dim", &theme.dim),
             ("border", &theme.border),
-            ("red", &theme.red),
-            ("green", &theme.green),
-            ("yellow", &theme.yellow),
-            ("orange", &theme.orange),
-            ("purple", &theme.purple),
+            ("error", &theme.error),
+            ("success", &theme.success),
+            ("warning", &theme.warning),
         ] {
             let body = role.strip_prefix('#');
             let ok = body.map(|h| h.len() == 6 && h.bytes().all(|b| b.is_ascii_hexdigit()));
@@ -212,5 +218,46 @@ proptest! {
             luminance(&light.background) > luminance(&light.text),
             "light theme has darker background than text (seed={hex})"
         );
+    }
+
+    #[test]
+    fn achromatic_seed_stays_achromatic(
+        gray in any::<u8>(),
+        dark in any::<bool>(),
+    ) {
+        // Grayscale in → grayscale out for every tonal role: the engine
+        // must not invent saturation (ronin-shade regression test).
+        let hex = format!("#{gray:02X}{gray:02X}{gray:02X}");
+        let theme = theme_from_seed_hex(&hex, dark, Scheme::Tonal, WCAG_AA_NORMAL).unwrap();
+        for (name, role) in [
+            ("background", &theme.background),
+            ("surface", &theme.surface),
+            ("surface_variant", &theme.surface_variant),
+            ("primary", &theme.primary),
+            ("accent", &theme.accent),
+            ("text", &theme.text),
+            ("subtext", &theme.subtext),
+            ("dim", &theme.dim),
+            ("border", &theme.border),
+        ] {
+            let c = chroma_of(role);
+            prop_assert!(
+                c < 0.02,
+                "{name} gained chroma {c:.4} from grayscale seed {hex}: {role}"
+            );
+        }
+        // …while status roles keep their spec-hue floor chroma so error /
+        // warning / success stay distinguishable from body text.
+        for (name, role) in [
+            ("error", &theme.error),
+            ("success", &theme.success),
+            ("warning", &theme.warning),
+        ] {
+            let c = chroma_of(role);
+            prop_assert!(
+                c > 0.02,
+                "{name} lost its hue on grayscale seed {hex}: {role}"
+            );
+        }
     }
 }

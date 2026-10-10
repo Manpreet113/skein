@@ -15,14 +15,12 @@ pub enum ColorRole {
     Subtext,
     Dim,
     Border,
-    Red,
-    Green,
-    Yellow,
-    Orange,
-    Purple,
+    Error,
+    Success,
+    Warning,
 }
 
-pub const ALL_ROLES: [ColorRole; 14] = [
+pub const ALL_ROLES: [ColorRole; 12] = [
     ColorRole::Background,
     ColorRole::Surface,
     ColorRole::SurfaceVariant,
@@ -32,11 +30,9 @@ pub const ALL_ROLES: [ColorRole; 14] = [
     ColorRole::Subtext,
     ColorRole::Dim,
     ColorRole::Border,
-    ColorRole::Red,
-    ColorRole::Green,
-    ColorRole::Yellow,
-    ColorRole::Orange,
-    ColorRole::Purple,
+    ColorRole::Error,
+    ColorRole::Success,
+    ColorRole::Warning,
 ];
 
 impl ColorRole {
@@ -51,11 +47,9 @@ impl ColorRole {
             Self::Subtext => "Subtext",
             Self::Dim => "Dim",
             Self::Border => "Border",
-            Self::Red => "Red",
-            Self::Green => "Green",
-            Self::Yellow => "Yellow",
-            Self::Orange => "Orange",
-            Self::Purple => "Purple",
+            Self::Error => "Error",
+            Self::Success => "Success",
+            Self::Warning => "Warning",
         }
     }
 
@@ -70,11 +64,9 @@ impl ColorRole {
             Self::Subtext => &t.subtext,
             Self::Dim => &t.dim,
             Self::Border => &t.border,
-            Self::Red => &t.red,
-            Self::Green => &t.green,
-            Self::Yellow => &t.yellow,
-            Self::Orange => &t.orange,
-            Self::Purple => &t.purple,
+            Self::Error => &t.error,
+            Self::Success => &t.success,
+            Self::Warning => &t.warning,
         }
     }
 
@@ -89,11 +81,9 @@ impl ColorRole {
             Self::Subtext => &mut t.subtext,
             Self::Dim => &mut t.dim,
             Self::Border => &mut t.border,
-            Self::Red => &mut t.red,
-            Self::Green => &mut t.green,
-            Self::Yellow => &mut t.yellow,
-            Self::Orange => &mut t.orange,
-            Self::Purple => &mut t.purple,
+            Self::Error => &mut t.error,
+            Self::Success => &mut t.success,
+            Self::Warning => &mut t.warning,
         }
     }
 }

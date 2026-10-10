@@ -54,16 +54,14 @@ pub struct Theme {
     pub dim: String,
     /// UI stroke color derived from the surface ramp (not text-contrast enforced).
     pub border: String,
-    /// Status red, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
-    pub red: String,
-    /// Status green, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
-    pub green: String,
-    /// Status yellow, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
-    pub yellow: String,
-    /// Status orange, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
-    pub orange: String,
-    /// Status purple, fixed hue, text-contrast enforced ≥ 4.5:1 on `background`.
-    pub purple: String,
+    /// Error/destructive status color. Lives in the red hue family by spec
+    /// (like Material's error role — hue is a documented choice, not derived),
+    /// text-contrast enforced ≥ 4.5:1 on `background`.
+    pub error: String,
+    /// Success status color (green hue family), enforced ≥ 4.5:1.
+    pub success: String,
+    /// Warning status color (amber hue family), enforced ≥ 4.5:1.
+    pub warning: String,
     /// 16-color terminal palette derived from the same hues (see [`AnsiPalette`]).
     pub ansi: AnsiPalette,
     /// Raw Oklch seed for downstream manipulation (e.g. QML).
@@ -121,11 +119,9 @@ impl Theme {
             subtext: "#a6adc8".into(),
             dim: "#6c7086".into(),
             border: "#45475a".into(),
-            red: "#f38ba8".into(),
-            green: "#a6e3a1".into(),
-            yellow: "#f9e2af".into(),
-            orange: "#fab387".into(),
-            purple: "#cba6f7".into(),
+            error: "#f38ba8".into(),
+            success: "#a6e3a1".into(),
+            warning: "#f9e2af".into(),
             ansi: AnsiPalette {
                 black: ansi("#11111b"),
                 red: ansi("#f38ba8"),
@@ -163,6 +159,12 @@ const KMEANS_MAX_ITER: usize = 20;
 const KMEANS_CONVERGENCE: f32 = 1e-4; // tight convergence in Oklab space
 const KMEANS_SEED: u64 = 0xDEAD_BEEF_CAFE_1337;
 const MAX_DIM: u32 = 128;
+
+/// Seeds below this chroma count as achromatic: there is no color in the
+/// source to preserve, so the tonal roles keep the seed's ~zero chroma
+/// instead of being floored up to the scheme minimum (which would invent
+/// a tint — e.g. teal primaries on a grayscale wallpaper).
+const ACHROMATIC_THRESHOLD: f32 = 0.015;
 
 /// How strongly the seed hue is expressed in the palette.
 /// Plays the role of matugen's/pywal's scheme selection.
@@ -438,17 +440,30 @@ fn lab_to_oklch(lab: palette::Lab<palette::white_point::D65, f32>) -> Oklch<f32>
 ///   text:           nudged until WCAG ≥ `contrast` on background
 ///   subtext:        nudged until WCAG ≥ 3.0 on background
 ///   dim:            nudged from near-background until WCAG ≥ 3.0
-///   red/green/yellow/orange/purple: fixed hues (30/150/105/60/310),
-///     nudged until WCAG ≥ 4.5
-///   ansi: status hues reused for red/green/yellow, fixed hues for
+///   error/success/warning: spec hues (red 30/green 150/amber 105),
+///     nudged until WCAG ≥ 4.5; on achromatic seeds they keep the scheme
+///     floor chroma so status stays distinguishable (Material precedent)
+///   ansi: error/success/warning hues reused, fixed hues for
 ///     blue (264)/magenta (328)/cyan (192), black near-background,
 ///     white = text; brights lifted, held to ≥ 3.0
 /// ```
 fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) -> Theme {
     let h = seed.hue;
     // Clamp seed chroma to a tasteful range; very high chroma looks garish.
+    // Achromatic seeds keep their ~zero chroma: flooring them up to `cmin`
+    // would invent a tint the wallpaper never had.
     let (cmin, cmax) = scheme.primary_chroma_range();
-    let c_primary = seed.chroma.clamp(cmin, cmax);
+    let achromatic = seed.chroma < ACHROMATIC_THRESHOLD;
+    let c_primary = if achromatic {
+        seed.chroma
+    } else {
+        seed.chroma.clamp(cmin, cmax)
+    };
+    // Status roles need enough chroma to read as their spec hue even on
+    // grayscale wallpapers; otherwise error/warning/success collapse into
+    // indistinguishable grays. The scheme floor is the minimum tint that
+    // preserves hue identity.
+    let c_status = c_primary.max(cmin);
     let c_surface = c_primary * 0.3; // surfaces are subtly tinted
 
     let (bg_l, sf_l, sfv_l, primary_l_range, text_l_start, text_l_step) = if dark {
@@ -516,10 +531,10 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
     };
     let border = oklch_to_hex(Oklch::new(border_l, c_surface * 0.7, h));
 
-    // Status colors keep fixed semantic hues (red ~30°, green ~150°,
-    // yellow ~105°, orange ~60°, purple ~310° in Oklch) with the scheme's
-    // chroma, then get the same contrast-walk as text so they stay legible
-    // on `background`.
+    // Semantic status colors. Their hues are spec choices, not derivations:
+    // error lives in the red family (~30°), success in green (~150°),
+    // warning in amber (~105°) — the Material convention. Each gets the
+    // contrast-walk so it stays legible on `background`.
     // Walk direction always heads *away* from the background so the loop
     // converges even for mid-range starts.
     let (status_start, status_step) = if dark {
@@ -530,18 +545,16 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
     let status = |hue_deg: f32| {
         enforce_contrast(
             bg_l,
-            c_primary,
+            c_status,
             palette::OklabHue::new(hue_deg),
             status_start,
             status_step,
             WCAG_AA_NORMAL.max(contrast),
         )
     };
-    let red = status(30.0);
-    let green = status(150.0);
-    let yellow = status(105.0);
-    let orange = status(60.0);
-    let purple = status(310.0);
+    let error = status(30.0);
+    let success = status(150.0);
+    let warning = status(105.0);
     // Terminal blue/magenta/cyan need hues distinct from any seed: fixed
     // cool hues with the same enforcement as the other status colors.
     let blue = status(264.0);
@@ -570,20 +583,20 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
     ));
     let ansi = AnsiPalette {
         black,
-        red: red.clone(),
-        green: green.clone(),
-        yellow: yellow.clone(),
+        red: error.clone(),
+        green: success.clone(),
+        yellow: warning.clone(),
         blue: blue.clone(),
         magenta: magenta.clone(),
         cyan: cyan.clone(),
         white: text.clone(),
         bright_black: bright(h, c_surface * 0.5),
-        bright_red: bright(palette::OklabHue::new(30.0), c_primary),
-        bright_green: bright(palette::OklabHue::new(150.0), c_primary),
-        bright_yellow: bright(palette::OklabHue::new(105.0), c_primary),
-        bright_blue: bright(palette::OklabHue::new(264.0), c_primary),
-        bright_magenta: bright(palette::OklabHue::new(328.0), c_primary),
-        bright_cyan: bright(palette::OklabHue::new(192.0), c_primary),
+        bright_red: bright(palette::OklabHue::new(30.0), c_status),
+        bright_green: bright(palette::OklabHue::new(150.0), c_status),
+        bright_yellow: bright(palette::OklabHue::new(105.0), c_status),
+        bright_blue: bright(palette::OklabHue::new(264.0), c_status),
+        bright_magenta: bright(palette::OklabHue::new(328.0), c_status),
+        bright_cyan: bright(palette::OklabHue::new(192.0), c_status),
         bright_white: bright(h, c_surface * 0.15),
     };
 
@@ -597,11 +610,9 @@ fn build_palette(seed: Oklch<f32>, dark: bool, scheme: Scheme, contrast: f32) ->
         subtext,
         dim,
         border,
-        red,
-        green,
-        yellow,
-        orange,
-        purple,
+        error,
+        success,
+        warning,
         ansi,
         seed_oklch: OklchSeed {
             lightness: seed.l,
@@ -759,9 +770,9 @@ mod tests {
                 let bg = hex_to_srgb(&theme.background).unwrap();
                 let bg_lum = wcag_luminance(bg);
                 for (name, hex) in [
-                    ("red", &theme.red),
-                    ("green", &theme.green),
-                    ("yellow", &theme.yellow),
+                    ("error", &theme.error),
+                    ("success", &theme.success),
+                    ("warning", &theme.warning),
                 ] {
                     let fg = hex_to_srgb(hex).unwrap();
                     let cr = contrast_ratio(bg_lum, wcag_luminance(fg));
@@ -778,9 +789,9 @@ mod tests {
                 );
                 for (name, hex) in [
                     ("border", &theme.border),
-                    ("red", &theme.red),
-                    ("green", &theme.green),
-                    ("yellow", &theme.yellow),
+                    ("error", &theme.error),
+                    ("success", &theme.success),
+                    ("warning", &theme.warning),
                     ("dim", &theme.dim),
                 ] {
                     assert!(
@@ -788,6 +799,44 @@ mod tests {
                         "{name} is not #RRGGBB: {hex}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn achromatic_seed_stays_achromatic() {
+        // A grayscale seed must not gain invented saturation: tonal roles
+        // keep ~zero chroma instead of being floored to the scheme minimum.
+        // Status roles deliberately keep the scheme floor chroma so error /
+        // warning / success stay distinguishable (documented spec choice).
+        for dark in [true, false] {
+            let theme =
+                theme_from_seed_hex("#7A7A7A", dark, Scheme::Tonal, WCAG_AA_NORMAL).unwrap();
+            for (name, hex) in [
+                ("background", &theme.background),
+                ("surface", &theme.surface),
+                ("surface_variant", &theme.surface_variant),
+                ("primary", &theme.primary),
+                ("accent", &theme.accent),
+                ("text", &theme.text),
+                ("subtext", &theme.subtext),
+            ] {
+                let c = hex_to_oklch_chroma(hex);
+                assert!(
+                    c < 0.02,
+                    "{name} gained chroma {c:.4} from an achromatic seed (dark={dark}): {hex}"
+                );
+            }
+            for (name, hex) in [
+                ("error", &theme.error),
+                ("success", &theme.success),
+                ("warning", &theme.warning),
+            ] {
+                let c = hex_to_oklch_chroma(hex);
+                assert!(
+                    c > 0.02,
+                    "{name} lost its spec hue on an achromatic seed (dark={dark}): {hex}"
+                );
             }
         }
     }
@@ -810,5 +859,12 @@ mod tests {
         let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
         let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
         Some(Srgb::new(r, g, b))
+    }
+
+    fn hex_to_oklch_chroma(hex: &str) -> f32 {
+        let srgb = hex_to_srgb(hex).unwrap();
+        let oklab: Oklab<f32> = srgb.into_color();
+        let oklch: Oklch<f32> = oklab.into_color();
+        oklch.chroma
     }
 }
