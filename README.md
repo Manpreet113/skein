@@ -68,6 +68,36 @@ output_dir    = "~/.cache/skein"
 CLI flags override config values. `--mode auto` detects the system preference
 (`$SKEIN_MODE`, GNOME `gsettings color-scheme`, `$GTK_THEME`, default dark).
 
+### App selection & placement
+
+`targets` restricts which templates render (matched by output filename, e.g.
+`"kitty.conf"`); omit it to render everything. `[deploy]` symlinks rendered
+outputs into the live locations where apps actually read them. It defaults
+**off** — nothing outside the cache is touched unless you opt in:
+
+```toml
+targets = ["kitty.conf", "ghostty.conf", "fish-theme.fish"]
+
+[deploy]
+enable = true
+on_conflict = "backup"   # backup | overwrite | skip
+
+[deploy.targets]
+"fish-theme.fish" = "~/.config/fish/conf.d/skein-theme.fish"
+"yazi-theme.toml" = "~/.config/yazi/theme.toml"
+"btop.theme"      = "~/.config/btop/themes/skein.theme"
+"skein.lua"       = "~/.config/nvim/colors/skein.lua"
+```
+
+Safety rules: existing files are backed up once to `<dest>.skein-bak`
+(`overwrite` replaces with a warning, `skip` leaves them alone); directories
+are never touched; managed destinations are recorded in
+`~/.cache/skein/deployed.json`; per-target failures warn and continue.
+`include`/`source`-style templates (kitty, foot, starship, …) need no entry —
+they are consumed from the cache directly. Run `skeinc deploy` to apply
+placement immediately without waiting for a theme change. Do not list paths
+managed by home-manager (or anything else) here — pick one owner per path.
+
 ## Themes & templates
 
 Templates live in `~/.config/skein/templates/` and are seeded from the built-in set

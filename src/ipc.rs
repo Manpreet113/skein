@@ -422,7 +422,7 @@ mod tests {
         let (tx, rx) = watch::channel(Arc::new(dummy_theme()));
         let tmpl_dir = dir.path().join("tmpl");
         let out_dir = dir.path().join("out");
-        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, None).await.unwrap();
 
         spawn_ipc_tasks(
             &socket_path,
@@ -479,7 +479,7 @@ mod tests {
         let (tx, mut rx) = watch::channel(Arc::new(dummy_theme()));
         let tmpl_dir = dir.path().join("tmpl");
         let out_dir = dir.path().join("out");
-        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, None).await.unwrap();
 
         spawn_ipc_tasks(
             &socket_path,
@@ -532,7 +532,7 @@ mod tests {
         let (tx, mut rx) = watch::channel(Arc::new(dummy_theme()));
         let tmpl_dir = dir.path().join("tmpl");
         let out_dir = dir.path().join("out");
-        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, None).await.unwrap();
 
         spawn_ipc_tasks(
             &socket_path,

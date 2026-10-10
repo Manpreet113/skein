@@ -6,6 +6,7 @@ use tokio::{signal, sync::watch};
 use tracing::{info, warn};
 
 use skein::color::{self, Scheme, Theme};
+use skein::deploy::{self, expand_tilde, DeployFileConfig, DeployPlan};
 use skein::template::{self, TemplateRenderer};
 use skein::{ipc, wallpaper};
 
@@ -90,20 +91,12 @@ struct FileConfig {
     scheme: Option<String>,
     seed: Option<String>,
     contrast: Option<f32>,
-}
-
-/// Expand a leading `~` or `~/` to the user's home directory.
-fn expand_tilde(p: PathBuf) -> PathBuf {
-    match p.to_str() {
-        Some("~") => dirs_next::home_dir().unwrap_or(p),
-        Some(s) if s.starts_with("~/") => {
-            match dirs_next::home_dir() {
-                Some(home) => home.join(&s[2..]),
-                None => p,
-            }
-        }
-        _ => p,
-    }
+    /// Template output filenames to render (e.g. `"kitty.conf"`).
+    /// Omitted or `"*"` = render everything in `template_dir`.
+    targets: Option<Vec<String>>,
+    /// Opt-in placement of rendered outputs into live locations.
+    #[serde(default)]
+    deploy: DeployFileConfig,
 }
 
 struct Config {
@@ -115,6 +108,8 @@ struct Config {
     scheme: Scheme,
     seed: Option<String>,
     contrast: f32,
+    targets: Option<Vec<String>>,
+    deploy: DeployPlan,
 }
 
 impl Config {
@@ -162,6 +157,8 @@ impl Config {
             .unwrap_or(4.5_f32)
             .clamp(1.0, 21.0);
 
+        let deploy = DeployPlan::resolve(&file.deploy);
+
         Ok(Self {
             socket_path: args
                 .socket
@@ -191,6 +188,8 @@ impl Config {
             scheme,
             seed,
             contrast,
+            targets: file.targets,
+            deploy,
         })
     }
 }
@@ -234,8 +233,9 @@ async fn main() -> Result<()> {
         } else {
             template::seed_builtin_templates(&config.template_dir).await?;
             let renderer =
-                TemplateRenderer::load(&config.template_dir, &config.output_dir).await?;
+                TemplateRenderer::load(&config.template_dir, &config.output_dir, config.targets.as_deref()).await?;
             renderer.render_all(&theme).await?;
+            deploy::ensure_deploy(&config.output_dir, &config.deploy).await;
             println!("Rendered templates to {}", config.output_dir.display());
             println!("{}", serde_json::to_string_pretty(&theme)?);
         }
@@ -249,7 +249,7 @@ async fn main() -> Result<()> {
 
     template::seed_builtin_templates(&config.template_dir).await?;
 
-    let renderer = TemplateRenderer::load(&config.template_dir, &config.output_dir)
+    let renderer = TemplateRenderer::load(&config.template_dir, &config.output_dir, config.targets.as_deref())
         .await
         .context("Failed to load template renderer")?;
 
@@ -279,7 +279,7 @@ async fn main() -> Result<()> {
         .with_context(|| format!("Invalid --seed value: {seed_hex}"))?;
         let arc = Arc::new(theme);
         info!(bg = %arc.background, primary = %arc.primary, "Applying pinned seed theme");
-        broadcast_and_render(&arc, &theme_tx, &renderer, &config.output_dir);
+        broadcast_and_render(&arc, &theme_tx, &renderer, &config.output_dir, &config.deploy);
 
         info!("Daemon running with pinned seed theme — wallpaper monitor disabled");
         let _ = signal::ctrl_c().await;
@@ -344,8 +344,8 @@ async fn main() -> Result<()> {
                     match theme_res {
                         Ok(Ok(theme)) => {
                             let arc_theme = Arc::new(theme);
-                            info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
-                            broadcast_and_render(&arc_theme, &theme_tx, &renderer, &config.output_dir);
+                                    info!(bg = %arc_theme.background, primary = %arc_theme.primary, "Applying wallpaper theme");
+                                    broadcast_and_render(&arc_theme, &theme_tx, &renderer, &config.output_dir, &config.deploy);
                         }
                         Ok(Err(e)) => warn!(error = %e, "Theme extraction failed"),
                         Err(e) => warn!(error = %e, "Theme extraction task panicked"),
@@ -368,11 +368,13 @@ fn broadcast_and_render(
     theme_tx: &watch::Sender<Arc<Theme>>,
     renderer: &Arc<TemplateRenderer>,
     output_dir: &std::path::Path,
+    deploy: &DeployPlan,
 ) {
     let _ = theme_tx.send(Arc::clone(theme));
     let renderer = Arc::clone(renderer);
     let theme_for_tmpl = Arc::clone(theme);
     let output_dir = output_dir.to_path_buf();
+    let deploy = deploy.clone();
     tokio::spawn(async move {
         if let Err(e) = renderer.render_all(&theme_for_tmpl).await {
             warn!(error = %e, "Template render pass failed");
@@ -380,6 +382,8 @@ fn broadcast_and_render(
         if let Err(e) = template::write_snapshot(&output_dir, &theme_for_tmpl).await {
             warn!(error = %e, "Theme snapshot write failed");
         }
+        // Placement is best-effort and self-reporting; it never fails here.
+        deploy::ensure_deploy(&output_dir, &deploy).await;
     });
 }
 

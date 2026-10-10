@@ -74,6 +74,14 @@ enum Command {
     Set {
         path: PathBuf,
     },
+    /// Apply `[deploy]` placement from config.toml right now (symlink
+    /// rendered outputs into live locations) without needing a theme
+    /// change or daemon restart.
+    Deploy {
+        /// Path to config file (default: ~/.config/skein/config.toml).
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -134,7 +142,7 @@ async fn main() -> Result<()> {
 
         skein::template::seed_builtin_templates(&template_dir).await?;
         let renderer =
-            skein::template::TemplateRenderer::load(&template_dir, &preview_dir).await?;
+            skein::template::TemplateRenderer::load(&template_dir, &preview_dir, None).await?;
         renderer.render_all(&theme).await?;
 
         println!("Preview rendered to {}", preview_dir.display());
@@ -182,6 +190,49 @@ async fn main() -> Result<()> {
         .await
         .context("Timed out waiting for daemon to apply the wallpaper")??;
         println!("{}", serde_json::to_string_pretty(&updated)?);
+        return Ok(());
+    }
+
+    if let Some(Command::Deploy { config }) = &args.command {
+        #[derive(Debug, Default, serde::Deserialize)]
+        struct DeployFile {
+            output_dir: Option<PathBuf>,
+            #[serde(default)]
+            deploy: skein::deploy::DeployFileConfig,
+        }
+
+        let config_path = config.clone().unwrap_or_else(|| {
+            std::env::var("XDG_CONFIG_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| {
+                    dirs_next::config_dir().unwrap_or_else(|| PathBuf::from("~/.config"))
+                })
+                .join("skein/config.toml")
+        });
+        let file: DeployFile = match std::fs::read_to_string(&config_path) {
+            Ok(raw) => toml::from_str(&raw)
+                .with_context(|| format!("Failed to parse {}", config_path.display()))?,
+            Err(_) => DeployFile::default(),
+        };
+        let output_dir = file
+            .output_dir
+            .map(skein::deploy::expand_tilde)
+            .unwrap_or_else(|| {
+                std::env::var("XDG_CACHE_HOME")
+                    .map(|d| PathBuf::from(d).join("skein"))
+                    .unwrap_or_else(|_| skein::deploy::expand_tilde("~/.cache/skein".into()))
+            });
+        let plan = skein::deploy::DeployPlan::resolve(&file.deploy);
+        if !plan.enabled() {
+            println!("deploy is not enabled (set [deploy] enable = true with targets in config.toml)");
+            return Ok(());
+        }
+
+        let report = skein::deploy::ensure_deploy(&output_dir, &plan).await;
+        println!(
+            "deploy: {} linked, {} skipped, {} backed up",
+            report.linked, report.skipped, report.backed_up
+        );
         return Ok(());
     }
 

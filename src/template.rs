@@ -183,15 +183,32 @@ impl TemplateRenderer {
     /// Template files must end in `.jinja`.  The output path is derived by
     /// stripping the `.jinja` suffix and writing to `output_dir`.
     ///
+    /// `targets` optionally restricts which templates render, matched by
+    /// output filename (`"kitty.conf"`, with or without the `.jinja`
+    /// suffix); `"*"` and `None` both mean everything. Unlisted templates
+    /// are still seeded, just never rendered.
+    ///
     /// Example:
     ///   template_dir  = ~/.config/skein/templates/
     ///   output_dir    = ~/.cache/skein/
     ///   template file = colors.css.jinja  →  output = ~/.cache/skein/colors.css
-    pub async fn load(template_dir: &Path, output_dir: &Path) -> Result<Arc<Self>> {
+    pub async fn load(
+        template_dir: &Path,
+        output_dir: &Path,
+        targets: Option<&[String]>,
+    ) -> Result<Arc<Self>> {
         // Ensure the output directory exists.
         fs::create_dir_all(output_dir)
             .await
             .with_context(|| format!("Failed to create output dir {}", output_dir.display()))?;
+
+        let wanted: Option<std::collections::HashSet<String>> = targets
+            .filter(|list| !list.iter().any(|t| t.trim() == "*"))
+            .map(|list| {
+                list.iter()
+                    .map(|t| t.trim().trim_end_matches(".jinja").to_owned())
+                    .collect()
+            });
 
         let mut env = Environment::new();
         // skein templates emit code/markup, never HTML — disable autoescape.
@@ -242,6 +259,13 @@ impl TemplateRenderer {
             // Strip `.jinja` suffix for output filename.
             let out_name = name.trim_end_matches(".jinja").to_owned();
             let out_path = output_dir.join(&out_name);
+
+            // Honor the `targets` allowlist: everything compiles (so errors
+            // still surface at startup), but unlisted templates never render.
+            if wanted.as_ref().is_some_and(|w| !w.contains(&out_name)) {
+                debug!(template = %name, "Skipping template (not in targets)");
+                continue;
+            }
 
             info!(template = %name, output = %out_path.display(), "Loaded template");
             outputs.push((name, out_path));
@@ -353,7 +377,7 @@ mod tests {
         )
         .unwrap();
 
-        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, None).await.unwrap();
         renderer.render_all(&dummy_theme()).await.unwrap();
 
         let output = std::fs::read_to_string(out_dir.join("colors.css")).unwrap();
@@ -368,7 +392,44 @@ mod tests {
         let out_dir = tmp.path().join("output");
 
         // Should not error — just warns and returns an empty renderer.
-        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir).await.unwrap();
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, None).await.unwrap();
         renderer.render_all(&dummy_theme()).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn targets_allowlist_skips_unlisted_templates() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tmpl_dir = tmp.path().join("templates");
+        let out_dir = tmp.path().join("output");
+        std::fs::create_dir_all(&tmpl_dir).unwrap();
+
+        std::fs::write(tmpl_dir.join("a.css.jinja"), "a {{ theme.background }}").unwrap();
+        std::fs::write(tmpl_dir.join("b.css.jinja"), "b {{ theme.background }}").unwrap();
+
+        let allow = vec!["a.css".to_string()];
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, Some(&allow))
+            .await
+            .unwrap();
+        renderer.render_all(&dummy_theme()).await.unwrap();
+
+        assert!(out_dir.join("a.css").exists());
+        assert!(!out_dir.join("b.css").exists());
+    }
+
+    #[tokio::test]
+    async fn targets_star_renders_everything() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tmpl_dir = tmp.path().join("templates");
+        let out_dir = tmp.path().join("output");
+        std::fs::create_dir_all(&tmpl_dir).unwrap();
+
+        std::fs::write(tmpl_dir.join("a.css.jinja"), "a").unwrap();
+        let allow = vec!["*".to_string(), "whatever".to_string()];
+        let renderer = TemplateRenderer::load(&tmpl_dir, &out_dir, Some(&allow))
+            .await
+            .unwrap();
+        renderer.render_all(&dummy_theme()).await.unwrap();
+
+        assert!(out_dir.join("a.css").exists());
     }
 }
