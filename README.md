@@ -148,11 +148,26 @@ theme + terminal + syntax tokens), `skein.lua` (Neovim colorscheme),
     mode   = "auto";
     scheme = "tonal";
     wallpaperDir = "~/Pictures/wallpapers";
+    targets = [ "kitty.conf" "skein.lua" "skein.theme.css" ];
+    deploy = {
+      enable = true;
+      onConflict = "backup";   # backup | overwrite | skip
+      targets = {
+        "skein.lua" = "~/.config/nvim/colors/skein.lua";
+        "skein.theme.css" = "~/.config/Vencord/themes/skein.css";
+        "zen-userChrome.css" = "~/.zen/your-profile/chrome/zen-userChrome.css";
+        "skein-color-theme.json" = "~/.vscode/extensions/skein-theme/skein-color-theme.json";
+      };
+    };
   };
 }
 ```
 
 Enables the daemon as a systemd user service and writes `config.toml`.
+`targets` restricts which templates render; `deploy` symlinks rendered
+outputs into live locations (off unless `enable = true`). Do not list
+paths managed by home-manager itself (or anything else) — one owner
+per path.
 
 ## Color pipeline
 

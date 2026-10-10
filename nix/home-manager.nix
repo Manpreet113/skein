@@ -55,6 +55,32 @@ in {
       default = null;
       description = "Directory rendered templates are written to. String; ~ is expanded by the daemon.";
     };
+
+    targets = mkOption {
+      type = types.nullOr (types.listOf types.str);
+      default = null;
+      description = "Template output filenames to render (e.g. [ \"kitty.conf\" \"ghostty.conf\" ]). Null renders everything in the template directory.";
+    };
+
+    deploy = {
+      enable = mkEnableOption "placement of rendered templates into live locations (default off, matching the daemon)";
+
+      onConflict = mkOption {
+        type = types.enum [ "backup" "overwrite" "skip" ];
+        default = "backup";
+        description = "What the daemon does when a destination exists and is not skein-managed.";
+      };
+
+      targets = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = {
+          "yazi-theme.toml" = "~/.config/yazi/theme.toml";
+          "skein.lua" = "~/.config/nvim/colors/skein.lua";
+        };
+        description = "Map of rendered output filename to live destination. Keys are output filenames as seen in the cache dir (no .jinja). Destinations may use ~; the daemon expands it.";
+      };
+    };
   };
 
   config = mkIf cfg.enable {
@@ -69,6 +95,14 @@ in {
         wallpaper_dir = cfg.wallpaperDir;
         template_dir = cfg.templateDir;
         output_dir = cfg.outputDir;
+        targets = cfg.targets;
+        # Always emitted (daemon treats enable = false as inert); key names
+        # are mapped to the snake_case TOML keys the daemon parses.
+        deploy = {
+          enable = cfg.deploy.enable;
+          on_conflict = cfg.deploy.onConflict;
+          targets = cfg.deploy.targets;
+        };
       }
     );
 
